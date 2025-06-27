@@ -51,10 +51,11 @@ class WebSearchMCPServer {
       const { name, arguments: args } = request.params;
 
       if (name === 'web_search_full') {
-        const validatedArgs = args as unknown as WebSearchToolInput;
-        if (!validatedArgs.query || typeof validatedArgs.query !== 'string') {
-          throw new Error('Invalid arguments: query is required and must be a string');
-        }
+        // Handle both 'arguments' and 'parameters' fields that LLMs might use
+        const toolArgs = args || (request.params as any).parameters || {};
+        
+        // Convert and validate arguments
+        const validatedArgs = this.validateAndConvertArgs(toolArgs);
         
         const result = await this.handleWebSearch(validatedArgs);
         return {
@@ -115,6 +116,39 @@ class WebSearchMCPServer {
         ],
       };
     });
+  }
+
+  private validateAndConvertArgs(args: any): WebSearchToolInput {
+    // Ensure query is a string
+    if (!args.query || typeof args.query !== 'string') {
+      throw new Error('Invalid arguments: query is required and must be a string');
+    }
+
+    // Convert limit to number if it's a string
+    let limit = 5; // default
+    if (args.limit !== undefined) {
+      const limitValue = typeof args.limit === 'string' ? parseInt(args.limit, 10) : args.limit;
+      if (isNaN(limitValue) || limitValue < 1 || limitValue > 10) {
+        throw new Error('Invalid limit: must be a number between 1 and 10');
+      }
+      limit = limitValue;
+    }
+
+    // Convert includeContent to boolean if it's a string
+    let includeContent = true; // default
+    if (args.includeContent !== undefined) {
+      if (typeof args.includeContent === 'string') {
+        includeContent = args.includeContent.toLowerCase() === 'true';
+      } else {
+        includeContent = Boolean(args.includeContent);
+      }
+    }
+
+    return {
+      query: args.query,
+      limit,
+      includeContent,
+    };
   }
 
   private async handleWebSearch(input: WebSearchToolInput): Promise<WebSearchToolOutput> {
