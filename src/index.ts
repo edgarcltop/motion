@@ -1,43 +1,23 @@
 #!/usr/bin/env node
+console.log('Web Search MCP Server starting...');
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { SearchEngine } from './search-engine.js';
 import { ContentExtractor } from './content-extractor.js';
 import { WebSearchToolInput, WebSearchToolOutput } from './types.js';
 
-// Define schemas for MCP requests
-const ToolsCallRequestSchema = z.object({
-  method: z.literal('tools/call'),
-  params: z.object({
-    name: z.string(),
-    arguments: z.record(z.unknown()),
-  }),
-});
-
-const ToolsListRequestSchema = z.object({
-  method: z.literal('tools/list'),
-  params: z.object({}).optional(),
-});
-
 class WebSearchMCPServer {
-  private server: Server;
+  private server: McpServer;
   private searchEngine: SearchEngine;
   private contentExtractor: ContentExtractor;
 
   constructor() {
-    this.server = new Server(
-      {
-        name: 'web-search-mcp',
-        version: '0.1.0',
-      },
-      {
-        capabilities: {
-          tools: {},
-        },
-      }
-    );
+    this.server = new McpServer({
+      name: 'web-search-mcp',
+      version: '0.1.0',
+    });
 
     this.searchEngine = new SearchEngine();
     this.contentExtractor = new ContentExtractor();
@@ -46,83 +26,63 @@ class WebSearchMCPServer {
   }
 
   private setupTools(): void {
-    // Handle tool calls
-    this.server.setRequestHandler(ToolsCallRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+    // Register the web search tool using the older API
+    this.server.tool(
+      'full-web-search',
+      'Search the web and fetch complete page content from top results',
+      {
+        query: z.string().describe('Search query to execute'),
+        limit: z.number().min(1).max(10).default(5).describe('Number of results to return with full content (1-10)'),
+        includeContent: z.boolean().default(true).describe('Whether to fetch full page content (default: true)'),
+      },
+      async (args: any) => {
+        console.log(`[MCP] Tool call received: full-web-search`);
+        console.log(`[MCP] Raw arguments:`, JSON.stringify(args, null, 2));
 
-      console.error(`Tool call received: ${name}`);
-      console.error(`Arguments:`, JSON.stringify(args, null, 2));
-
-      if (name === 'web_search_full') {
-        // Handle both 'arguments' and 'parameters' fields that LLMs might use
-        const toolArgs = args || (request.params as any).parameters || {};
-        
-        console.error(`Processed tool args:`, JSON.stringify(toolArgs, null, 2));
-        
-        // Convert and validate arguments
-        const validatedArgs = this.validateAndConvertArgs(toolArgs);
-        
-        console.error(`Validated args:`, JSON.stringify(validatedArgs, null, 2));
-        
-        const result = await this.handleWebSearch(validatedArgs);
-        
-        console.error(`Search result:`, JSON.stringify(result, null, 2));
-        
-        // Return standard MCP tool call result format
-        const response = {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Search completed for "${result.query}" with ${result.total_results} results.`,
-            },
-          ],
-          toolResults: [
-            {
-              result,
-            },
-          ],
-        };
-        
-        console.error(`Sending response:`, JSON.stringify(response, null, 2));
-        return response;
-      }
-
-      throw new Error(`Unknown tool: ${name}`);
-    });
-
-    // Handle tool listing
-    this.server.setRequestHandler(ToolsListRequestSchema, async () => {
-      return {
-        tools: [
-          {
-            name: 'web_search_full',
-            description: 'Search the web and fetch complete page content from top results',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                query: {
-                  type: 'string',
-                  description: 'Search query to execute',
-                },
-                limit: {
-                  type: 'number',
-                  description: 'Number of results to return with full content (1-10)',
-                  minimum: 1,
-                  maximum: 10,
-                  default: 5,
-                },
-                includeContent: {
-                  type: 'boolean',
-                  description: 'Whether to fetch full page content (default: true)',
-                  default: true,
-                },
+        try {
+          // Convert and validate arguments
+          const validatedArgs = this.validateAndConvertArgs(args);
+          
+          console.log(`[MCP] Validated args:`, JSON.stringify(validatedArgs, null, 2));
+          
+          console.log(`[MCP] Starting web search...`);
+          const result = await this.handleWebSearch(validatedArgs);
+          
+          console.log(`[MCP] Search completed, result:`, JSON.stringify(result, null, 2));
+          
+          // Format the results as a comprehensive text response
+          let responseText = `Search completed for "${result.query}" with ${result.total_results} results:\n\n`;
+          
+          result.results.forEach((result, index) => {
+            responseText += `**${index + 1}. ${result.title}**\n`;
+            responseText += `URL: ${result.url}\n`;
+            responseText += `Description: ${result.description}\n`;
+            
+            if (result.fullContent && result.fullContent.trim()) {
+              responseText += `\n**Full Content:**\n${result.fullContent}\n`;
+            } else if (result.contentPreview && result.contentPreview.trim()) {
+              responseText += `\n**Content Preview:**\n${result.contentPreview}\n`;
+            } else if (result.fetchStatus === 'error') {
+              responseText += `\n**Content Extraction Failed:** ${result.error}\n`;
+            }
+            
+            responseText += `\n---\n\n`;
+          });
+          
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: responseText,
               },
-              required: ['query'],
-            },
-          },
-        ],
-      };
-    });
+            ],
+          };
+        } catch (error) {
+          console.error(`[MCP] Error in tool handler:`, error);
+          throw error;
+        }
+      }
+    );
   }
 
   private validateAndConvertArgs(args: any): WebSearchToolInput {
@@ -189,9 +149,14 @@ class WebSearchMCPServer {
   }
 
   async run(): Promise<void> {
+    console.log('Setting up MCP server...');
     const transport = new StdioServerTransport();
+    
+    console.log('Connecting to transport...');
     await this.server.connect(transport);
-    console.error('Web Search MCP Server started');
+    console.log('Web Search MCP Server started');
+    console.log('Server timestamp:', new Date().toISOString());
+    console.log('Waiting for MCP messages...');
   }
 }
 

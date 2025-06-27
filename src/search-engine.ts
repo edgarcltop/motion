@@ -17,131 +17,289 @@ export class SearchEngine {
     const { query, numResults = 5, timeout = 10000 } = options;
     const sanitizedQuery = sanitizeQuery(query);
     
+    console.log(`[SearchEngine] Starting search for query: "${sanitizedQuery}"`);
+    
     try {
       return await this.rateLimiter.execute(async () => {
-        const response = await axios.get(this.baseUrl, {
-          params: {
-            q: sanitizedQuery,
-            num: Math.min(numResults, 10), // Google limits to 10 results per request
-            hl: 'en', // Language
-            safe: 'off', // Safe search off
-          },
-          headers: {
-            'User-Agent': getRandomUserAgent(),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-            'Accept-Encoding': 'gzip, deflate',
-            'DNT': '1',
-            'Connection': 'keep-alive',
-            'Upgrade-Insecure-Requests': '1',
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-          },
-          timeout,
-          validateStatus: (status: number) => status < 400,
-        });
-
-        return this.parseSearchResults(response.data, numResults);
+        console.log(`[SearchEngine] Making request to Google...`);
+        
+        // Try multiple approaches to get search results
+        const approaches = [
+          this.tryGoogleSearch.bind(this),
+          this.tryAlternativeSearch.bind(this),
+          this.tryDuckDuckGoSearch.bind(this)
+        ];
+        
+        for (const approach of approaches) {
+          try {
+            const results = await approach(sanitizedQuery, numResults, timeout);
+            if (results.length > 0) {
+              console.log(`[SearchEngine] Found ${results.length} results with approach`);
+              return results;
+            }
+          } catch (error) {
+            console.error(`[SearchEngine] Approach failed:`, error);
+          }
+        }
+        
+        console.log(`[SearchEngine] All approaches failed, returning empty results`);
+        return [];
       });
     } catch (error) {
-      console.error('Search error:', error);
+      console.error('[SearchEngine] Search error:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('[SearchEngine] Axios error details:', {
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+          data: error.response?.data?.substring(0, 500),
+        });
+      }
       throw new Error(`Failed to perform search: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
+  private async tryGoogleSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    // Add a small random delay to appear more human-like
+    const delay = Math.random() * 1000 + 500; // 500-1500ms
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    const response = await axios.get(this.baseUrl, {
+      params: {
+        q: query,
+        num: Math.min(numResults, 10),
+        hl: 'en',
+        safe: 'off',
+        source: 'hp',
+        biw: '1920',
+        bih: '969',
+        tbm: '', // No specific tab
+        ie: 'UTF-8',
+        oe: 'UTF-8',
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+        'sec-ch-ua-mobile': '?0',
+        'sec-ch-ua-platform': '"macOS"',
+        'Referer': 'https://www.google.com/',
+        'Origin': 'https://www.google.com',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      timeout,
+      validateStatus: (status: number) => status < 400,
+    });
+
+    console.log(`[SearchEngine] Got response with status: ${response.status}`);
+    console.log(`[SearchEngine] Response length: ${response.data.length} characters`);
+    
+    // Check if we got a bot detection page
+    if (response.data.includes('enablejs') || response.data.includes('Please click here') || 
+        response.data.includes('unusual traffic') || response.data.includes('captcha') ||
+        response.data.includes('robot') || response.data.includes('automated')) {
+      console.log(`[SearchEngine] Detected bot challenge page, trying alternative approach`);
+      throw new Error('Bot detection page received');
+    }
+    
+    // Log a small sample of the HTML to see what we're getting
+    const htmlSample = response.data.substring(0, 500);
+    console.log(`[SearchEngine] HTML sample: ${htmlSample}`);
+    
+    const results = this.parseSearchResults(response.data, numResults);
+    console.log(`[SearchEngine] Parsed ${results.length} results`);
+    
+    return results;
+  }
+
+  private async tryAlternativeSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    console.log(`[SearchEngine] Trying alternative search approach...`);
+    
+    // Add a small random delay
+    const delay = Math.random() * 2000 + 1000; // 1000-3000ms
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Try with different parameters and headers
+    const response = await axios.get(this.baseUrl, {
+      params: {
+        q: query,
+        num: Math.min(numResults, 10),
+        hl: 'en',
+        safe: 'off',
+        pws: '0', // Disable personalized results
+        filter: '0', // Disable duplicate filtering
+        start: '0',
+        ie: 'UTF-8',
+        oe: 'UTF-8',
+        gws_rd: 'cr',
+      },
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Referer': 'https://www.google.com/',
+        'Origin': 'https://www.google.com',
+      },
+      timeout,
+      validateStatus: (status: number) => status < 400,
+    });
+
+    console.log(`[SearchEngine] Alternative approach got response with status: ${response.status}`);
+    
+    // Check if we got a bot detection page
+    if (response.data.includes('enablejs') || response.data.includes('Please click here') ||
+        response.data.includes('unusual traffic') || response.data.includes('captcha') ||
+        response.data.includes('robot') || response.data.includes('automated')) {
+      console.log(`[SearchEngine] Alternative approach also got bot challenge page`);
+      throw new Error('Bot detection page received');
+    }
+    
+    const results = this.parseSearchResults(response.data, numResults);
+    console.log(`[SearchEngine] Alternative approach parsed ${results.length} results`);
+    
+    return results;
+  }
+
+  private async tryDuckDuckGoSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    console.log(`[SearchEngine] Trying DuckDuckGo as fallback...`);
+    
+    try {
+      const response = await axios.get('https://html.duckduckgo.com/html/', {
+        params: {
+          q: query,
+        },
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
+        },
+        timeout,
+        validateStatus: (status: number) => status < 400,
+      });
+
+      console.log(`[SearchEngine] DuckDuckGo got response with status: ${response.status}`);
+      
+      const results = this.parseDuckDuckGoResults(response.data, numResults);
+      console.log(`[SearchEngine] DuckDuckGo parsed ${results.length} results`);
+      
+      return results;
+    } catch (error) {
+      console.error(`[SearchEngine] DuckDuckGo search failed:`, error);
+      throw error;
+    }
+  }
+
   private parseSearchResults(html: string, maxResults: number): SearchResult[] {
+    console.log(`[SearchEngine] Parsing HTML with length: ${html.length}`);
+    
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
     const timestamp = generateTimestamp();
 
-    // Google search results are typically in divs with class 'g'
-    // Each result has a title in h3, URL in a href, and snippet in div
-    $('div.g').each((index, element) => {
-      if (results.length >= maxResults) return false; // Stop if we have enough results
-
-      const $element = $(element);
-      
-      // Extract title and URL from the main link
-      const $titleElement = $element.find('h3');
-      const $linkElement = $titleElement.closest('a');
-      
-      if ($titleElement.length && $linkElement.length) {
-        const title = $titleElement.text().trim();
-        const url = $linkElement.attr('href');
-        
-        // Extract snippet/description
-        const snippet = $element.find('.VwiC3b, .st, .aCOpRe, .IsZvec').text().trim();
-        
-        if (title && url && this.isValidSearchUrl(url)) {
-          results.push({
-            title,
-            url: this.cleanGoogleUrl(url),
-            description: snippet || 'No description available',
-            fullContent: '', // Will be filled by content extractor
-            contentPreview: '',
-            wordCount: 0,
-            timestamp,
-            fetchStatus: 'success',
-          });
-        }
-      }
-    });
-
-    // If we didn't find results with the 'g' class, try alternative selectors
-    if (results.length === 0) {
-      return this.parseAlternativeResults($, maxResults, timestamp);
-    }
-
-    return results;
-  }
-
-  private parseAlternativeResults($: cheerio.CheerioAPI, maxResults: number, timestamp: string): SearchResult[] {
-    const results: SearchResult[] = [];
-
-    // Try different selectors that Google might use
-    const selectors = [
+    // Log what selectors we find - more comprehensive debugging
+    const gElements = $('div.g');
+    const sokobanElements = $('div[data-sokoban-container]');
+    const tF2CxcElements = $('.tF2Cxc');
+    const rcElements = $('.rc');
+    const vedElements = $('[data-ved]');
+    const h3Elements = $('h3');
+    const linkElements = $('a[href]');
+    
+    console.log(`[SearchEngine] Found elements:`);
+    console.log(`  - div.g: ${gElements.length}`);
+    console.log(`  - div[data-sokoban-container]: ${sokobanElements.length}`);
+    console.log(`  - .tF2Cxc: ${tF2CxcElements.length}`);
+    console.log(`  - .rc: ${rcElements.length}`);
+    console.log(`  - [data-ved]: ${vedElements.length}`);
+    console.log(`  - h3: ${h3Elements.length}`);
+    console.log(`  - a[href]: ${linkElements.length}`);
+    
+    // Try multiple approaches to find search results
+    const searchResultSelectors = [
+      'div.g',
       'div[data-sokoban-container]',
       '.tF2Cxc',
       '.rc',
-      '[data-ved]'
+      '[data-ved]',
+      'div[jscontroller]'
     ];
-
-    for (const selector of selectors) {
-      $(selector).each((index, element) => {
+    
+    let foundResults = false;
+    
+    for (const selector of searchResultSelectors) {
+      if (foundResults) break;
+      
+      console.log(`[SearchEngine] Trying selector: ${selector}`);
+      const elements = $(selector);
+      console.log(`[SearchEngine] Found ${elements.length} elements with selector ${selector}`);
+      
+      elements.each((index, element) => {
         if (results.length >= maxResults) return false;
-
+        
         const $element = $(element);
         
-        // Look for title in various possible locations
-        const titleSelectors = ['h3', '.LC20lb', '.DKV0Md', 'a[data-ved]'];
+        // Try multiple title selectors
+        const titleSelectors = ['h3', '.LC20lb', '.DKV0Md', 'a[data-ved]', '.r', '.s'];
         let title = '';
         let url = '';
-
+        
         for (const titleSelector of titleSelectors) {
           const $title = $element.find(titleSelector).first();
           if ($title.length) {
             title = $title.text().trim();
+            console.log(`[SearchEngine] Found title with ${titleSelector}: "${title}"`);
+            
+            // Try to find the link
             const $link = $title.closest('a');
             if ($link.length) {
               url = $link.attr('href') || '';
+              console.log(`[SearchEngine] Found URL: "${url}"`);
+            } else {
+              // Try to find any link in the element
+              const $anyLink = $element.find('a[href]').first();
+              if ($anyLink.length) {
+                url = $anyLink.attr('href') || '';
+                console.log(`[SearchEngine] Found URL from any link: "${url}"`);
+              }
             }
             break;
           }
         }
-
-        // Look for snippet in various possible locations
-        const snippetSelectors = ['.VwiC3b', '.st', '.aCOpRe', '.IsZvec', '.s3v9rd', '.MUxGbd'];
+        
+        // Try multiple snippet selectors
+        const snippetSelectors = ['.VwiC3b', '.st', '.aCOpRe', '.IsZvec', '.s3v9rd', '.MUxGbd', '.aCOpRe', '.snippet-content'];
         let snippet = '';
         
         for (const snippetSelector of snippetSelectors) {
           const $snippet = $element.find(snippetSelector).first();
           if ($snippet.length) {
             snippet = $snippet.text().trim();
+            console.log(`[SearchEngine] Found snippet with ${snippetSelector}: "${snippet.substring(0, 100)}..."`);
             break;
           }
         }
-
+        
         if (title && url && this.isValidSearchUrl(url)) {
+          console.log(`[SearchEngine] Adding result: ${title}`);
           results.push({
             title,
             url: this.cleanGoogleUrl(url),
@@ -152,21 +310,100 @@ export class SearchEngine {
             timestamp,
             fetchStatus: 'success',
           });
+          foundResults = true;
+        } else {
+          console.log(`[SearchEngine] Skipping result: title="${title}", url="${url}", isValid=${this.isValidSearchUrl(url)}`);
         }
       });
+    }
 
-      if (results.length > 0) break; // Found results with this selector
+    console.log(`[SearchEngine] Found ${results.length} results with all selectors`);
+
+    // If still no results, try a more aggressive approach - look for any h3 with links
+    if (results.length === 0) {
+      console.log(`[SearchEngine] No results found, trying aggressive h3 search...`);
+      $('h3').each((index, element) => {
+        if (results.length >= maxResults) return false;
+        
+        const $h3 = $(element);
+        const title = $h3.text().trim();
+        const $link = $h3.closest('a');
+        
+        if ($link.length && title) {
+          const url = $link.attr('href') || '';
+          console.log(`[SearchEngine] Aggressive search found: "${title}" -> "${url}"`);
+          
+          if (this.isValidSearchUrl(url)) {
+            results.push({
+              title,
+              url: this.cleanGoogleUrl(url),
+              description: 'No description available',
+              fullContent: '',
+              contentPreview: '',
+              wordCount: 0,
+              timestamp,
+              fetchStatus: 'success',
+            });
+          }
+        }
+      });
+      
+      console.log(`[SearchEngine] Aggressive search found ${results.length} results`);
     }
 
     return results;
   }
 
+  private parseDuckDuckGoResults(html: string, maxResults: number): SearchResult[] {
+    console.log(`[SearchEngine] Parsing DuckDuckGo HTML with length: ${html.length}`);
+    
+    const $ = cheerio.load(html);
+    const results: SearchResult[] = [];
+    const timestamp = generateTimestamp();
+
+    // DuckDuckGo results are in .result elements
+    $('.result').each((index, element) => {
+      if (results.length >= maxResults) return false;
+
+      const $element = $(element);
+      
+      // Extract title and URL
+      const $titleElement = $element.find('.result__title a');
+      const title = $titleElement.text().trim();
+      const url = $titleElement.attr('href');
+      
+      // Extract snippet
+      const snippet = $element.find('.result__snippet').text().trim();
+      
+      if (title && url) {
+        console.log(`[SearchEngine] DuckDuckGo found: "${title}" -> "${url}"`);
+        results.push({
+          title,
+          url: this.cleanDuckDuckGoUrl(url),
+          description: snippet || 'No description available',
+          fullContent: '',
+          contentPreview: '',
+          wordCount: 0,
+          timestamp,
+          fetchStatus: 'success',
+        });
+      }
+    });
+
+    console.log(`[SearchEngine] DuckDuckGo found ${results.length} results`);
+    return results;
+  }
+
   private isValidSearchUrl(url: string): boolean {
-    // Google search results URLs should start with /url? or be direct URLs
+    // Google search results URLs can be in various formats
     return url.startsWith('/url?') || 
            url.startsWith('http://') || 
            url.startsWith('https://') ||
-           url.startsWith('//');
+           url.startsWith('//') ||
+           url.startsWith('/search?') ||
+           url.startsWith('/') ||
+           url.includes('google.com') ||
+           url.length > 10; // Accept any reasonably long URL
   }
 
   private cleanGoogleUrl(url: string): string {
@@ -188,6 +425,32 @@ export class SearchEngine {
       return 'https:' + url;
     }
 
+    return url;
+  }
+
+  private cleanDuckDuckGoUrl(url: string): string {
+    // DuckDuckGo URLs are redirect URLs that need to be decoded
+    if (url.startsWith('//duckduckgo.com/l/')) {
+      try {
+        // Extract the uddg parameter which contains the actual URL
+        const urlParams = new URLSearchParams(url.substring(url.indexOf('?') + 1));
+        const actualUrl = urlParams.get('uddg');
+        if (actualUrl) {
+          // Decode the URL
+          const decodedUrl = decodeURIComponent(actualUrl);
+          console.log(`[SearchEngine] Decoded DuckDuckGo URL: ${decodedUrl}`);
+          return decodedUrl;
+        }
+      } catch (error) {
+        console.log(`[SearchEngine] Failed to decode DuckDuckGo URL: ${url}`, error);
+      }
+    }
+    
+    // If it's a protocol-relative URL, add https:
+    if (url.startsWith('//')) {
+      return 'https:' + url;
+    }
+    
     return url;
   }
 }
