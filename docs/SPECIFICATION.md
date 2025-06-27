@@ -277,12 +277,37 @@ Create comprehensive `README.md` with:
 
 Users will configure the server in their `mcp.json`:
 
+### Option 1: Global Installation
 ```json
 {
   "mcpServers": {
-    "web-search-full": {
+    "web-search": {
+      "command": "web-search-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Option 2: Using npx (No Installation Required)
+```json
+{
+  "mcpServers": {
+    "web-search": {
       "command": "npx",
       "args": ["web-search-mcp-server"]
+    }
+  }
+}
+```
+
+### Option 3: Local Installation
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "node",
+      "args": ["./node_modules/web-search-mcp-server/dist/index.js"]
     }
   }
 }

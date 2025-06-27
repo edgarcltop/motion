@@ -10,30 +10,76 @@ A TypeScript MCP (Model Context Protocol) server that performs Google web search
 - **TypeScript**: Built with TypeScript for type safety and better development experience
 - **CLI Executable**: Can be run as a standalone CLI tool or integrated with MCP clients
 
-## Quick Start
+## Installation
 
-### Installation
-
+### For Development
 ```bash
+git clone https://github.com/mrkrsl/web-search-mcp.git
+cd web-search-mcp
 npm install
-```
-
-### Development
-
-```bash
-npm run dev
-```
-
-### Build
-
-```bash
 npm run build
 ```
 
-### Usage
+### For Global Installation
+```bash
+npm install -g web-search-mcp-server
+```
+
+### For MCP Integration (Recommended)
+```bash
+npm install web-search-mcp-server
+```
+
+## Development
 
 ```bash
-npm start
+npm run dev    # Development with hot reload
+npm run build  # Build TypeScript to JavaScript
+npm run lint   # Run ESLint
+npm run format # Run Prettier
+```
+
+## MCP Integration
+
+### LM Studio Configuration
+
+Add to your `mcp.json`:
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "web-search-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Claude Desktop Configuration
+
+Add to your `mcp.json`:
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "/usr/local/bin/web-search-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Using npx (No Installation Required)
+
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "npx",
+      "args": ["web-search-mcp-server"]
+    }
+  }
+}
 ```
 
 ## MCP Tool
@@ -44,6 +90,32 @@ This server provides a `web_search_full` tool that:
 2. Performs a Google search
 3. Fetches full page content from each result URL
 4. Returns structured data with search results and extracted content
+
+### Example Usage
+```json
+{
+  "name": "web_search_full",
+  "arguments": {
+    "query": "TypeScript MCP server",
+    "limit": 3,
+    "includeContent": true
+  }
+}
+```
+
+## Standalone Usage
+
+You can also run the server directly:
+```bash
+# If installed globally
+web-search-mcp
+
+# If using npx
+npx web-search-mcp-server
+
+# If running from source
+npm start
+```
 
 ## Documentation
 
