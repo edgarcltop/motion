@@ -50,28 +50,41 @@ class WebSearchMCPServer {
     this.server.setRequestHandler(ToolsCallRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      console.error(`Tool call received: ${name}`);
+      console.error(`Arguments:`, JSON.stringify(args, null, 2));
+
       if (name === 'web_search_full') {
         // Handle both 'arguments' and 'parameters' fields that LLMs might use
         const toolArgs = args || (request.params as any).parameters || {};
         
+        console.error(`Processed tool args:`, JSON.stringify(toolArgs, null, 2));
+        
         // Convert and validate arguments
         const validatedArgs = this.validateAndConvertArgs(toolArgs);
         
+        console.error(`Validated args:`, JSON.stringify(validatedArgs, null, 2));
+        
         const result = await this.handleWebSearch(validatedArgs);
-        return {
+        
+        console.error(`Search result:`, JSON.stringify(result, null, 2));
+        
+        // Return standard MCP tool call result format
+        const response = {
           content: [
             {
               type: 'text' as const,
-              text: `Search completed for "${result.query}" with ${result.total_results} results`,
+              text: `Search completed for "${result.query}" with ${result.total_results} results.`,
             },
           ],
-          isError: false,
           toolResults: [
             {
               result,
             },
           ],
         };
+        
+        console.error(`Sending response:`, JSON.stringify(response, null, 2));
+        return response;
       }
 
       throw new Error(`Unknown tool: ${name}`);
@@ -105,12 +118,6 @@ class WebSearchMCPServer {
                 },
               },
               required: ['query'],
-            },
-            annotations: {
-              title: 'Web Search with Full Content',
-              description: 'Searches Google and fetches complete page content',
-              readOnlyHint: true,
-              openWorldHint: true,
             },
           },
         ],
