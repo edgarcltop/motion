@@ -198,9 +198,6 @@ web-search-mcp-server/
 │   └── utils.ts              # Utility functions
 ├── dist/                     # Compiled JavaScript
 ├── tests/                    # Test files
-├── .github/
-│   └── workflows/
-│       └── ci.yml            # GitHub Actions
 ├── package.json
 ├── tsconfig.json
 ├── .eslintrc.json
@@ -268,32 +265,7 @@ git push -u origin main
 ### 2. MIT License
 Create `LICENSE` file with standard MIT license text.
 
-### 3. GitHub Actions CI/CD
-Create `.github/workflows/ci.yml`:
-```yaml
-name: CI/CD
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
-```
-
-### 4. Documentation
+### 3. Documentation
 Create comprehensive `README.md` with:
 - Installation instructions
 - Configuration examples
@@ -334,7 +306,7 @@ Users will configure the server in their `mcp.json`:
 
 3. **Project Requirements**
    - ✅ MIT license
-   - ✅ GitHub repository with CI/CD
+   - ✅ GitHub repository
    - ✅ Comprehensive documentation
    - ✅ Easy installation and configuration
 
