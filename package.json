@@ -1,0 +1,41 @@
+{
+  "name": "web-search-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP server for web search with full page content extraction",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "web-search-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node ./dist/index.js",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write .",
+    "prepare": "npm run build"
+  },
+  "keywords": ["mcp", "web-search", "ai", "llm"],
+  "author": "Your Name",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/web-search-mcp-server.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.2",
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12",
+    "p-limit": "^4.0.0",
+    "p-retry": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.11.30",
+    "tsx": "^4.7.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.2.5",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0"
+  }
+}
