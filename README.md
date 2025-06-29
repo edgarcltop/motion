@@ -1,14 +1,21 @@
 # Web Search MCP Server
 
-A TypeScript MCP (Model Context Protocol) server that performs Google web searches and extracts full page content from search results.
+A TypeScript MCP (Model Context Protocol) server that performs web searches and extracts full page content from search results.
 
 ## Features
 
-- **Google Search Integration**: Performs web searches using Google
+- **Multi-Engine Web Search**: Tries Google Search first, and automatically falls back to DuckDuckGo if Google fails (e.g., due to bot detection or no results)
 - **Full Page Content Extraction**: Fetches and extracts complete page content from search results
 - **MCP Protocol Compliance**: Implements the Model Context Protocol for seamless integration with AI assistants
 - **TypeScript**: Built with TypeScript for type safety and better development experience
 - **CLI Executable**: Can be run as a standalone CLI tool or integrated with MCP clients
+
+## How It Works
+
+When a search is requested, the server:
+1. Attempts to fetch results from Google Search.
+2. If Google returns a bot detection page, fails, or returns no results, it automatically retries the search using DuckDuckGo.
+3. Extracts and returns the full content from the top results of whichever engine succeeded.
 
 ## Compatibility
 
@@ -72,7 +79,7 @@ Add to your `mcp.json`:
 This server provides a `full-web-search` tool that:
 
 1. Takes a search query and optional number of results (1-10, default 5)
-2. Performs a Google search
+2. Performs a web search (tries Google, then DuckDuckGo if needed)
 3. Fetches full page content from each result URL
 4. Returns structured data with search results and extracted content
 
