@@ -1,4 +1,4 @@
-# Web Search MCP Server
+# Web Search MCP Server for use with Local LLMs
 
 A TypeScript MCP (Model Context Protocol) server that performs web searches and extracts full page content from search results.
 
