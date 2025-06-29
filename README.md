@@ -121,5 +121,3 @@ This is an open source project and we welcome feedback! If you encounter any iss
 - Open an issue on GitHub
 - Submit a pull request
 - Share your experience with different models or MCP clients
-
-Your feedback helps make this tool better for everyone in the MCP community.
