@@ -28,6 +28,27 @@ This MCP server has been developed and tested with **LM Studio**. It has not bee
 
 ## Installation
 
+### From Release (Recommended)
+
+1. Download the latest release zip file from the [Releases page](https://github.com/mrkrsl/web-search-mcp/releases)
+2. Extract the zip file to a location on your system (e.g., `~/mcp-servers/web-search-mcp/`)
+3. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
+
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "node",
+      "args": ["/path/to/extracted/web-search-mcp/dist/index.js"]
+    }
+  }
+}
+```
+
+**Example paths:**
+- macOS/Linux: `~/mcp-servers/web-search-mcp/dist/index.js`
+- Windows: `C:\mcp-servers\web-search-mcp\dist\index.js`
+
 ### For Development
 ```bash
 git clone https://github.com/mrkrsl/web-search-mcp.git
