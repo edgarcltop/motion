@@ -22,10 +22,10 @@
     "ai",
     "llm"
   ],
-  "author": "Your Name",
+  "author": "Mark Russell",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/web-search-mcp-server.git"
+    "url": "https://github.com/mrkrsl/web-search-mcp.git"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",
