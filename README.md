@@ -22,9 +22,13 @@ When a search is requested, the server:
 This MCP server has been developed and tested with **LM Studio**. It has not been tested with other MCP clients.
 
 ### Model Compatibility
+Prioritise using more recent models designated for tool use. Older models (even those with tool use speified) may not work, and will throw a "The AI has nothing to say" error.
 
-- ✅ **Works well with**: Gemma 3, Qwen3
-- ❌ **Known issues with**: Llama 3.1, Llama 3.2 (tool calling doesn't work properly with these models)
+- ✅ Works with: **Deepseek R1** (0528 works, older models don't)
+- ✅ Works with: **Llama 3.1** (swallow-8B works, older models don't)
+- ✅ Works well with: **Qwen3**
+- ✅ Works well with: **Gemma 3**
+- ❌ Known issues with: Older versions of **Llama 3.1**, **Llama 3.2** and **Deepseek R1**
 
 ## Installation
 
