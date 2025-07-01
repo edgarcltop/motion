@@ -32,13 +32,16 @@ Older models (even those with tool use specified) may not work and may throw a "
 - ✅ Works well with: **Gemma 3**
 - ❌ Known issues with: Older versions of **Llama 3.1**, **Llama 3.2** and **Deepseek R1**
 
-## Installation
-
-### From Release (Recommended)
+## Installation (Recommended)
 
 1. Download the latest release zip file from the [Releases page](https://github.com/mrkrsl/web-search-mcp/releases)
 2. Extract the zip file to a location on your system (e.g., `~/mcp-servers/web-search-mcp/`)
-3. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
+3. **Open a terminal in the extracted folder and run:**
+   ```bash
+   npm install
+   ```
+   This will create a `node_modules` folder with all required dependencies.
+4. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
 
 ```json
 {
@@ -55,7 +58,9 @@ Older models (even those with tool use specified) may not work and may throw a "
 - macOS/Linux: `~/mcp-servers/web-search-mcp/dist/index.js`
 - Windows: `C:\mcp-servers\web-search-mcp\dist\index.js`
 
-### For Development
+**Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
+
+## For Development
 ```bash
 git clone https://github.com/mrkrsl/web-search-mcp.git
 cd web-search-mcp
@@ -88,19 +93,6 @@ Add to your `mcp.json`:
 }
 ```
 
-### Using npx (No Installation Required)
-
-```json
-{
-  "mcpServers": {
-    "web-search": {
-      "command": "npx",
-      "args": ["web-search-mcp-server"]
-    }
-  }
-}
-```
-
 ## MCP Tool
 
 This server provides a `full-web-search` tool that:
@@ -128,9 +120,6 @@ You can also run the server directly:
 ```bash
 # If running from source
 npm start
-
-# If using npx
-npx web-search-mcp-server
 ```
 
 ## Documentation
