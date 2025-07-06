@@ -34,13 +34,18 @@ Older models (even those with tool use specified) may not work and may throw a "
 
 ## Installation (Recommended)
 
+**Requirements:**
+- Node.js 18.0.0 or higher
+- npm 8.0.0 or higher
+
 1. Download the latest release zip file from the [Releases page](https://github.com/mrkrsl/web-search-mcp/releases)
 2. Extract the zip file to a location on your system (e.g., `~/mcp-servers/web-search-mcp/`)
 3. **Open a terminal in the extracted folder and run:**
    ```bash
    npm install
+   npm run build
    ```
-   This will create a `node_modules` folder with all required dependencies.
+   This will create a `node_modules` folder with all required dependencies and build the project.
 4. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
 
 ```json
@@ -59,6 +64,11 @@ Older models (even those with tool use specified) may not work and may throw a "
 - Windows: `C:/mcp-servers/web-search-mcp/dist/index.js`
 
 **Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
+
+**Troubleshooting:**
+- If `npm install` fails, try updating Node.js to version 18+ and npm to version 8+
+- If `npm run build` fails, ensure you have the latest Node.js version installed
+- For older Node.js versions, you may need to use an older release of this project
 
 ## For Development
 ```bash
