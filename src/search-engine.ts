@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { SearchOptions, SearchResult } from './types.js';
-import { getRandomUserAgent, sanitizeQuery, generateTimestamp } from './utils.js';
+import { generateTimestamp, sanitizeQuery } from './utils.js';
 import { RateLimiter } from './rate-limiter.js';
 
 export class SearchEngine {
@@ -202,9 +202,9 @@ export class SearchEngine {
       console.log(`[SearchEngine] DuckDuckGo parsed ${results.length} results`);
       
       return results;
-    } catch (error) {
-      console.error(`[SearchEngine] DuckDuckGo search failed:`, error);
-      throw error;
+    } catch {
+      console.error(`[SearchEngine] DuckDuckGo search failed`);
+      throw new Error('DuckDuckGo search failed');
     }
   }
 
@@ -441,8 +441,8 @@ export class SearchEngine {
           console.log(`[SearchEngine] Decoded DuckDuckGo URL: ${decodedUrl}`);
           return decodedUrl;
         }
-      } catch (error) {
-        console.log(`[SearchEngine] Failed to decode DuckDuckGo URL: ${url}`, error);
+      } catch {
+        console.log(`[SearchEngine] Failed to decode DuckDuckGo URL: ${url}`);
       }
     }
     

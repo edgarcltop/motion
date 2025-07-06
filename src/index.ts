@@ -35,7 +35,7 @@ class WebSearchMCPServer {
         limit: z.number().min(1).max(10).default(5).describe('Number of results to return with full content (1-10)'),
         includeContent: z.boolean().default(true).describe('Whether to fetch full page content (default: true)'),
       },
-      async (args: any) => {
+      async (args: unknown) => {
         console.log(`[MCP] Tool call received: full-web-search`);
         console.log(`[MCP] Raw arguments:`, JSON.stringify(args, null, 2));
 
@@ -85,17 +85,21 @@ class WebSearchMCPServer {
     );
   }
 
-  private validateAndConvertArgs(args: any): WebSearchToolInput {
+  private validateAndConvertArgs(args: unknown): WebSearchToolInput {
+    if (typeof args !== 'object' || args === null) {
+      throw new Error('Invalid arguments: args must be an object');
+    }
+    const obj = args as Record<string, unknown>;
     // Ensure query is a string
-    if (!args.query || typeof args.query !== 'string') {
+    if (!obj.query || typeof obj.query !== 'string') {
       throw new Error('Invalid arguments: query is required and must be a string');
     }
 
     // Convert limit to number if it's a string
     let limit = 5; // default
-    if (args.limit !== undefined) {
-      const limitValue = typeof args.limit === 'string' ? parseInt(args.limit, 10) : args.limit;
-      if (isNaN(limitValue) || limitValue < 1 || limitValue > 10) {
+    if (obj.limit !== undefined) {
+      const limitValue = typeof obj.limit === 'string' ? parseInt(obj.limit, 10) : obj.limit;
+      if (typeof limitValue !== 'number' || isNaN(limitValue) || limitValue < 1 || limitValue > 10) {
         throw new Error('Invalid limit: must be a number between 1 and 10');
       }
       limit = limitValue;
@@ -103,16 +107,16 @@ class WebSearchMCPServer {
 
     // Convert includeContent to boolean if it's a string
     let includeContent = true; // default
-    if (args.includeContent !== undefined) {
-      if (typeof args.includeContent === 'string') {
-        includeContent = args.includeContent.toLowerCase() === 'true';
+    if (obj.includeContent !== undefined) {
+      if (typeof obj.includeContent === 'string') {
+        includeContent = obj.includeContent.toLowerCase() === 'true';
       } else {
-        includeContent = Boolean(args.includeContent);
+        includeContent = Boolean(obj.includeContent);
       }
     }
 
     return {
-      query: args.query,
+      query: obj.query,
       limit,
       includeContent,
     };
@@ -162,7 +166,11 @@ class WebSearchMCPServer {
 
 // Start the server
 const server = new WebSearchMCPServer();
-server.run().catch((error) => {
-  console.error('Server error:', error);
+server.run().catch((error: unknown) => {
+  if (error instanceof Error) {
+    console.error('Server error:', error.message);
+  } else {
+    console.error('Server error:', error);
+  }
   process.exit(1);
 });

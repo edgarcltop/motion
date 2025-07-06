@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { ContentExtractionOptions, SearchResult } from './types.js';
-import { cleanText, getWordCount, getContentPreview, generateTimestamp, getRandomUserAgent } from './utils.js';
+import { cleanText, getWordCount, getContentPreview, generateTimestamp } from './utils.js';
 
 export class ContentExtractor {
   private readonly defaultTimeout: number;
