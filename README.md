@@ -24,13 +24,15 @@ This MCP server has been developed and tested with **LM Studio**. It has not bee
 ### Model Compatibility
 **Important:** Prioritise using more recent models designated for tool use. 
 
-Older models (even those with tool use specified) may not work and may throw a "Model failed to generate a tool call", "The AI has nothing to say" or a different error.
+Older models (even those with tool use specified) may not work or may work erratically. This seems to be the case with Llama and Deepseek. Qwen3 and Gemma 3 currently have the best restults.
 
-- ✅ Works with: Recent **Deepseek R1** (e.g 0528 works, older models don't)
-- ✅ Works with: Recent **Llama 3.1** (e.g 3.1 swallow-8B works, older models don't)
 - ✅ Works well with: **Qwen3**
 - ✅ Works well with: **Gemma 3**
-- ❌ Known issues with: Older versions of **Llama 3.1**, **Llama 3.2** and **Deepseek R1**
+- ✅ Works with: **Llama 3.2**
+- ✅ Works with: Recent **Llama 3.1** (e.g 3.1 swallow-8B)
+- ✅ Works with: Recent **Deepseek R1** (e.g 0528 works)
+- ⚠️ May have issues with: Some versions of **Llama** and **Deepseek R1**
+- ❌ May not work with: Older versions of **Llama** and **Deepseek R1**
 
 ## Installation (Recommended)
 

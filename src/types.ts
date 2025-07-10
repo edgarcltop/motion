@@ -35,6 +35,7 @@ export interface WebSearchToolInput {
   query: string;
   limit?: number;
   includeContent?: boolean;
+  maxContentLength?: number;
 }
 
 export interface WebSearchToolOutput {
