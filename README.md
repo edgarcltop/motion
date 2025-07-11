@@ -63,7 +63,7 @@ Older models (even those with tool use specified) may not work or may work errat
 
 **Example paths:**
 - macOS/Linux: `~/mcp-servers/web-search-mcp/dist/index.js`
-- Windows: `C:/mcp-servers/web-search-mcp/dist/index.js`
+- Windows: `C:\\mcp-servers\\web-search-mcp\\dist\\index.js`
 
 **Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
 
