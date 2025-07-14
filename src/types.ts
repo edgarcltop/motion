@@ -44,3 +44,30 @@ export interface WebSearchToolOutput {
   search_time_ms: number;
   query: string;
 }
+
+// New types for search summaries (snippets only)
+export interface SearchSummaryResult {
+  title: string;
+  url: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface SearchSummaryOutput {
+  results: SearchSummaryResult[];
+  total_results: number;
+  search_time_ms: number;
+  query: string;
+}
+
+// New types for single page content
+export interface SinglePageContentOutput {
+  url: string;
+  title: string;
+  content: string;
+  contentPreview: string;
+  wordCount: number;
+  timestamp: string;
+  fetchStatus: 'success' | 'error';
+  error?: string;
+}

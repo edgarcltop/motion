@@ -1,21 +1,37 @@
 # Web Search MCP Server for use with Local LLMs
 
-A TypeScript MCP (Model Context Protocol) server that performs web searches and extracts full page content from search results.
+A TypeScript MCP (Model Context Protocol) server that provides comprehensive web search capabilities with multiple tools for different use cases.
 
 ## Features
 
 - **Multi-Engine Web Search**: Tries Google Search first, and automatically falls back to DuckDuckGo if Google fails (e.g., due to bot detection or no results)
 - **Full Page Content Extraction**: Fetches and extracts complete page content from search results
+- **Multiple Search Tools**: Three specialised tools for different use cases
 - **MCP Protocol Compliance**: Implements the Model Context Protocol for seamless integration with AI assistants
 - **TypeScript**: Built with TypeScript for type safety and better development experience
 - **CLI Executable**: Can be run as a standalone CLI tool or integrated with MCP clients
 
 ## How It Works
 
-When a search is requested, the server:
+The server provides three specialised tools for different web search needs:
+
+### 1. `full-web-search` (Main Tool)
+When a comprehensive search is requested, the server:
 1. Attempts to fetch results from Google Search.
 2. If Google returns a bot detection page, fails, or returns no results, it automatically retries the search using DuckDuckGo.
 3. Extracts and returns the full content from the top results of whichever engine succeeded.
+
+### 2. `get-web-search-summaries` (Lightweight Alternative)
+For quick search results without full content extraction:
+1. Performs the same multi-engine search as `full-web-search`
+2. Returns only the search result snippets/descriptions
+3. Does not follow links to extract full page content
+
+### 3. `get-single-web-page-content` (Utility Tool)
+For extracting content from a specific webpage:
+1. Takes a single URL as input
+2. Follows the URL and extracts the main page content
+3. Removes navigation, ads, and other non-content elements
 
 ## Compatibility
 
@@ -105,16 +121,18 @@ Add to your `mcp.json`:
 }
 ```
 
-## MCP Tool
+## MCP Tools
 
-This server provides a `full-web-search` tool that:
+This server provides three specialised tools for different web search needs:
 
+### 1. `full-web-search` (Main Tool)
+The most comprehensive web search tool that:
 1. Takes a search query and optional number of results (1-10, default 5)
 2. Performs a web search (tries Google, then DuckDuckGo if needed)
 3. Fetches full page content from each result URL
 4. Returns structured data with search results and extracted content
 
-### Example Usage
+**Example Usage:**
 ```json
 {
   "name": "full-web-search",
@@ -122,6 +140,42 @@ This server provides a `full-web-search` tool that:
     "query": "TypeScript MCP server",
     "limit": 3,
     "includeContent": true
+  }
+}
+```
+
+### 2. `get-web-search-summaries` (Lightweight Alternative)
+A lightweight alternative for quick search results:
+1. Takes a search query and optional number of results (1-10, default 5)
+2. Performs the same multi-engine search as `full-web-search`
+3. Returns only search result snippets/descriptions (no content extraction)
+4. Faster and more efficient for quick research
+
+**Example Usage:**
+```json
+{
+  "name": "get-web-search-summaries",
+  "arguments": {
+    "query": "TypeScript MCP server",
+    "limit": 5
+  }
+}
+```
+
+### 3. `get-single-web-page-content` (Utility Tool)
+A utility tool for extracting content from a specific webpage:
+1. Takes a single URL as input
+2. Follows the URL and extracts the main page content
+3. Removes navigation, ads, and other non-content elements
+4. Useful for getting detailed content from a known webpage
+
+**Example Usage:**
+```json
+{
+  "name": "get-single-web-page-content",
+  "arguments": {
+    "url": "https://example.com/article",
+    "maxContentLength": 5000
   }
 }
 ```

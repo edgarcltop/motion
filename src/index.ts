@@ -6,7 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { SearchEngine } from './search-engine.js';
 import { ContentExtractor } from './content-extractor.js';
-import { WebSearchToolInput, WebSearchToolOutput } from './types.js';
+import { WebSearchToolInput, WebSearchToolOutput, SearchSummaryOutput, SinglePageContentOutput } from './types.js';
 
 class WebSearchMCPServer {
   private server: McpServer;
@@ -26,12 +26,12 @@ class WebSearchMCPServer {
   }
 
   private setupTools(): void {
-    // Register the web search tool using the older API
+    // Register the main web search tool (primary choice for comprehensive searches)
     this.server.tool(
       'full-web-search',
-      'Search the web and fetch complete page content from top results. Content length is automatically optimized based on model type.',
+      'Search the web and fetch complete page content from top results. This is the most comprehensive web search tool. It searches the web and then follows the resulting links to extract their full page content, providing the most detailed and complete information available. Use get-web-search-summaries for a lightweight alternative.',
       {
-        query: z.string().describe('Search query to execute'),
+        query: z.string().describe('Search query to execute (recommended for comprehensive research)'),
         limit: z.union([z.number(), z.string()]).transform((val) => {
           const num = typeof val === 'string' ? parseInt(val, 10) : val;
           if (isNaN(num) || num < 1 || num > 10) {
@@ -134,6 +134,174 @@ class WebSearchMCPServer {
           };
         } catch (error) {
           console.error(`[MCP] Error in tool handler:`, error);
+          throw error;
+        }
+      }
+    );
+
+    // Register the lightweight web search summaries tool (secondary choice for quick results)
+    this.server.tool(
+      'get-web-search-summaries',
+      'Search the web and return only the search result snippets/descriptions without following links to extract full page content. This is a lightweight alternative to full-web-search for when you only need brief search results. For comprehensive information, use full-web-search instead.',
+      {
+        query: z.string().describe('Search query to execute (lightweight alternative)'),
+        limit: z.union([z.number(), z.string()]).transform((val) => {
+          const num = typeof val === 'string' ? parseInt(val, 10) : val;
+          if (isNaN(num) || num < 1 || num > 10) {
+            throw new Error('Invalid limit: must be a number between 1 and 10');
+          }
+          return num;
+        }).default(5).describe('Number of search results to return (1-10)'),
+      },
+      async (args: unknown) => {
+        console.log(`[MCP] Tool call received: get-web-search-summaries`);
+        console.log(`[MCP] Raw arguments:`, JSON.stringify(args, null, 2));
+
+        try {
+          // Validate arguments
+          if (typeof args !== 'object' || args === null) {
+            throw new Error('Invalid arguments: args must be an object');
+          }
+          const obj = args as Record<string, unknown>;
+          
+          if (!obj.query || typeof obj.query !== 'string') {
+            throw new Error('Invalid arguments: query is required and must be a string');
+          }
+
+          let limit = 5; // default
+          if (obj.limit !== undefined) {
+            const limitValue = typeof obj.limit === 'string' ? parseInt(obj.limit, 10) : obj.limit;
+            if (typeof limitValue !== 'number' || isNaN(limitValue) || limitValue < 1 || limitValue > 10) {
+              throw new Error('Invalid limit: must be a number between 1 and 10');
+            }
+            limit = limitValue;
+          }
+
+          console.log(`[MCP] Starting web search summaries...`);
+          const startTime = Date.now();
+          
+          // Use existing search engine to get results with snippets
+          const searchResults = await this.searchEngine.search({
+            query: obj.query,
+            numResults: limit,
+          });
+
+          const searchTime = Date.now() - startTime;
+
+          // Convert to summary format (no content extraction)
+          const summaryResults = searchResults.map(result => ({
+            title: result.title,
+            url: result.url,
+            description: result.description,
+            timestamp: result.timestamp,
+          }));
+
+          console.log(`[MCP] Search summaries completed, found ${summaryResults.length} results`);
+
+          // Format the results as text
+          let responseText = `Search summaries for "${obj.query}" with ${summaryResults.length} results:\n\n`;
+          
+          summaryResults.forEach((result, index) => {
+            responseText += `**${index + 1}. ${result.title}**\n`;
+            responseText += `URL: ${result.url}\n`;
+            responseText += `Description: ${result.description}\n`;
+            responseText += `\n---\n\n`;
+          });
+
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: responseText,
+              },
+            ],
+          };
+        } catch (error) {
+          console.error(`[MCP] Error in get-web-search-summaries tool handler:`, error);
+          throw error;
+        }
+      }
+    );
+
+    // Register the single page content extraction tool
+    this.server.tool(
+      'get-single-web-page-content',
+      'Extract and return the full content from a single web page URL. This tool follows a provided URL and extracts the main page content. Useful for getting detailed content from a specific webpage without performing a search.',
+      {
+        url: z.string().url().describe('The URL of the web page to extract content from'),
+        maxContentLength: z.union([z.number(), z.string()]).transform((val) => {
+          const num = typeof val === 'string' ? parseInt(val, 10) : val;
+          if (isNaN(num) || num < 0) {
+            throw new Error('Invalid maxContentLength: must be a non-negative number');
+          }
+          return num;
+        }).optional().describe('Maximum characters for the extracted content (0 = no limit, undefined = use default limit). Usually not needed - content length is automatically optimized.'),
+      },
+      async (args: unknown) => {
+        console.log(`[MCP] Tool call received: get-single-web-page-content`);
+        console.log(`[MCP] Raw arguments:`, JSON.stringify(args, null, 2));
+
+        try {
+          // Validate arguments
+          if (typeof args !== 'object' || args === null) {
+            throw new Error('Invalid arguments: args must be an object');
+          }
+          const obj = args as Record<string, unknown>;
+          
+          if (!obj.url || typeof obj.url !== 'string') {
+            throw new Error('Invalid arguments: url is required and must be a string');
+          }
+
+          let maxContentLength: number | undefined;
+          if (obj.maxContentLength !== undefined) {
+            const maxLengthValue = typeof obj.maxContentLength === 'string' ? parseInt(obj.maxContentLength, 10) : obj.maxContentLength;
+            if (typeof maxLengthValue !== 'number' || isNaN(maxLengthValue) || maxLengthValue < 0) {
+              throw new Error('Invalid maxContentLength: must be a non-negative number');
+            }
+            // If maxContentLength is 0, treat it as "no limit" (undefined)
+            maxContentLength = maxLengthValue === 0 ? undefined : maxLengthValue;
+          }
+
+          console.log(`[MCP] Starting single page content extraction for: ${obj.url}`);
+          
+          // Use existing content extractor to get page content
+          const content = await this.contentExtractor.extractContent({
+            url: obj.url,
+            maxContentLength,
+          });
+
+          // Get page title from URL (simple extraction)
+          const urlObj = new URL(obj.url);
+          const title = urlObj.hostname + urlObj.pathname;
+
+          // Create content preview and word count
+          const contentPreview = content.length > 200 ? content.substring(0, 200) + '...' : content;
+          const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
+
+          console.log(`[MCP] Single page content extraction completed, extracted ${content.length} characters`);
+
+          // Format the result as text
+          let responseText = `**Page Content from: ${obj.url}**\n\n`;
+          responseText += `**Title:** ${title}\n`;
+          responseText += `**Word Count:** ${wordCount}\n`;
+          responseText += `**Content Length:** ${content.length} characters\n\n`;
+          
+          if (maxContentLength && maxContentLength > 0 && content.length > maxContentLength) {
+            responseText += `**Content (truncated at ${maxContentLength} characters):**\n${content.substring(0, maxContentLength)}\n\n[Content truncated at ${maxContentLength} characters]`;
+          } else {
+            responseText += `**Content:**\n${content}`;
+          }
+
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: responseText,
+              },
+            ],
+          };
+        } catch (error) {
+          console.error(`[MCP] Error in get-single-web-page-content tool handler:`, error);
           throw error;
         }
       }
