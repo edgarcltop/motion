@@ -48,4 +48,14 @@ export function getRandomUserAgent(): string {
 
 export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export function isPdfUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname.toLowerCase().endsWith('.pdf');
+  } catch {
+    // If URL parsing fails, check the raw string as fallback
+    return url.toLowerCase().endsWith('.pdf');
+  }
 } 

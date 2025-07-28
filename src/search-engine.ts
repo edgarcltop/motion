@@ -415,7 +415,7 @@ export class SearchEngine {
         if (actualUrl) {
           return actualUrl;
         }
-      } catch (error) {
+      } catch {
         console.warn('Failed to parse Google redirect URL:', url);
       }
     }

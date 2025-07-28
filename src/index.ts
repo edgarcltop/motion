@@ -6,7 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { SearchEngine } from './search-engine.js';
 import { ContentExtractor } from './content-extractor.js';
-import { WebSearchToolInput, WebSearchToolOutput, SearchSummaryOutput, SinglePageContentOutput } from './types.js';
+import { WebSearchToolInput, WebSearchToolOutput } from './types.js';
 
 class WebSearchMCPServer {
   private server: McpServer;
@@ -16,7 +16,7 @@ class WebSearchMCPServer {
   constructor() {
     this.server = new McpServer({
       name: 'web-search-mcp',
-      version: '0.1.0',
+      version: '0.2.0',
     });
 
     this.searchEngine = new SearchEngine();
@@ -186,7 +186,7 @@ class WebSearchMCPServer {
             numResults: limit,
           });
 
-          const searchTime = Date.now() - startTime;
+          // const searchTime = Date.now() - startTime; // Unused for now
 
           // Convert to summary format (no content extraction)
           const summaryResults = searchResults.map(result => ({
@@ -275,7 +275,7 @@ class WebSearchMCPServer {
           const title = urlObj.hostname + urlObj.pathname;
 
           // Create content preview and word count
-          const contentPreview = content.length > 200 ? content.substring(0, 200) + '...' : content;
+          // const contentPreview = content.length > 200 ? content.substring(0, 200) + '...' : content; // Unused for now
           const wordCount = content.split(/\s+/).filter(word => word.length > 0).length;
 
           console.log(`[MCP] Single page content extraction completed, extracted ${content.length} characters`);
@@ -350,16 +350,22 @@ class WebSearchMCPServer {
     const { query, limit = 5, includeContent = true } = input;
 
     try {
+      // Request extra search results to account for potential PDF files that will be skipped
+      // Request up to 2x the limit or at least 5 extra results, capped at 10 (Google's max)
+      const searchLimit = includeContent ? Math.min(limit * 2 + 2, 10) : limit;
+      
+      console.log(`[MCP] Requesting ${searchLimit} search results to get ${limit} non-PDF content results`);
+      
       // Perform the search
       const searchResults = await this.searchEngine.search({
         query,
-        numResults: limit,
+        numResults: searchLimit,
       });
 
-      // Extract content from each result if requested
+      // Extract content from each result if requested, with target count
       const enhancedResults = includeContent 
-        ? await this.contentExtractor.extractContentForResults(searchResults)
-        : searchResults;
+        ? await this.contentExtractor.extractContentForResults(searchResults, limit)
+        : searchResults.slice(0, limit); // If not extracting content, just take the first 'limit' results
 
       const searchTime = Date.now() - startTime;
 

@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { ContentExtractionOptions, SearchResult } from './types.js';
-import { cleanText, getWordCount, getContentPreview, generateTimestamp } from './utils.js';
+import { cleanText, getWordCount, getContentPreview, generateTimestamp, isPdfUrl } from './utils.js';
 
 export class ContentExtractor {
   private readonly defaultTimeout: number;
@@ -75,52 +75,57 @@ export class ContentExtractor {
     }
   }
 
-  async extractContentForResults(results: SearchResult[]): Promise<SearchResult[]> {
-    const enhancedResults = await Promise.allSettled(
-      results.map(async (result) => {
-        try {
-          const content = await this.extractContent({ url: result.url });
-          const cleanedContent = cleanText(content, this.maxContentLength);
-          
-          return {
-            ...result,
-            fullContent: cleanedContent,
-            contentPreview: getContentPreview(cleanedContent),
-            wordCount: getWordCount(cleanedContent),
-            timestamp: generateTimestamp(),
-            fetchStatus: 'success' as const,
-          };
-        } catch (error) {
-          return {
-            ...result,
-            fullContent: '',
-            contentPreview: '',
-            wordCount: 0,
-            timestamp: generateTimestamp(),
-            fetchStatus: 'error' as const,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          };
-        }
-      })
-    );
-
-    return enhancedResults.map((promiseResult) => {
-      if (promiseResult.status === 'fulfilled') {
-        return promiseResult.value;
-      } else {
-        return {
-          title: '',
-          url: '',
-          description: '',
+  async extractContentForResults(results: SearchResult[], targetCount: number = results.length): Promise<SearchResult[]> {
+    const enhancedResults: SearchResult[] = [];
+    let processedCount = 0;
+    
+    console.log(`[ContentExtractor] Processing up to ${results.length} results to get ${targetCount} non-PDF results`);
+    
+    for (const result of results) {
+      if (enhancedResults.length >= targetCount) {
+        console.log(`[ContentExtractor] Reached target count of ${targetCount} results`);
+        break;
+      }
+      
+      processedCount++;
+      
+      // Skip PDF files
+      if (isPdfUrl(result.url)) {
+        console.log(`[ContentExtractor] Skipping PDF file: ${result.url}`);
+        continue;
+      }
+      
+      try {
+        console.log(`[ContentExtractor] Extracting content from: ${result.url}`);
+        const content = await this.extractContent({ url: result.url });
+        const cleanedContent = cleanText(content, this.maxContentLength);
+        
+        enhancedResults.push({
+          ...result,
+          fullContent: cleanedContent,
+          contentPreview: getContentPreview(cleanedContent),
+          wordCount: getWordCount(cleanedContent),
+          timestamp: generateTimestamp(),
+          fetchStatus: 'success' as const,
+        });
+        
+        console.log(`[ContentExtractor] Successfully extracted content (${enhancedResults.length}/${targetCount})`);
+      } catch (error) {
+        console.log(`[ContentExtractor] Failed to extract content from ${result.url}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        enhancedResults.push({
+          ...result,
           fullContent: '',
           contentPreview: '',
           wordCount: 0,
           timestamp: generateTimestamp(),
           fetchStatus: 'error' as const,
-          error: 'Promise rejected',
-        };
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
       }
-    });
+    }
+    
+    console.log(`[ContentExtractor] Processed ${processedCount} results, extracted ${enhancedResults.length} non-PDF results`);
+    return enhancedResults;
   }
 
   private parseContent(html: string): string {
