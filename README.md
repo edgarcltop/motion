@@ -87,6 +87,21 @@ Older models (even those with tool use specified) may not work or may work errat
 - If `npm install` fails, try updating Node.js to version 18+ and npm to version 8+
 - If `npm run build` fails, ensure you have the latest Node.js version installed
 - For older Node.js versions, you may need to use an older release of this project
+- **Content Length Issues:** If you experience odd behavior due to content length limits, try setting `"MAX_CONTENT_LENGTH": "10000"`, or another value, in your `mcp.json` environment variables:
+
+```json
+{
+  "mcpServers": {
+    "web-search": {
+      "command": "node",
+      "args": ["/path/to/web-search-mcp/dist/index.js"],
+      "env": {
+        "MAX_CONTENT_LENGTH": "10000"
+      }
+    }
+  }
+}
+```
 
 ## For Development
 ```bash

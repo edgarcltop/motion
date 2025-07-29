@@ -16,7 +16,7 @@ class WebSearchMCPServer {
   constructor() {
     this.server = new McpServer({
       name: 'web-search-mcp',
-      version: '0.2.1',
+      version: '0.2.2',
     });
 
     this.searchEngine = new SearchEngine();
