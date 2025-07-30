@@ -71,3 +71,9 @@ export interface SinglePageContentOutput {
   fetchStatus: 'success' | 'error';
   error?: string;
 }
+
+// Search result with metadata about which search engine was used
+export interface SearchResultWithMetadata {
+  results: SearchResult[];
+  engine: string;
+}

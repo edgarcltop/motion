@@ -6,7 +6,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { SearchEngine } from './search-engine.js';
 import { ContentExtractor } from './content-extractor.js';
-import { WebSearchToolInput, WebSearchToolOutput } from './types.js';
+import { WebSearchToolInput, WebSearchToolOutput, SearchResult } from './types.js';
+import { isPdfUrl } from './utils.js';
 
 class WebSearchMCPServer {
   private server: McpServer;
@@ -64,14 +65,14 @@ class WebSearchMCPServer {
           // Auto-detect model types based on parameter formats
           // Llama models often send string parameters and struggle with large responses
           const isLikelyLlama = typeof args === 'object' && args !== null && (
-            ('limit' in args && typeof (args as any).limit === 'string') ||
-            ('includeContent' in args && typeof (args as any).includeContent === 'string')
+            ('limit' in args && typeof (args as Record<string, unknown>).limit === 'string') ||
+            ('includeContent' in args && typeof (args as Record<string, unknown>).includeContent === 'string')
           );
           
           // Detect models that handle large responses well (Qwen, Gemma, recent Deepseek)
           const isLikelyRobustModel = typeof args === 'object' && args !== null && (
-            ('limit' in args && typeof (args as any).limit === 'number') &&
-            ('includeContent' in args && typeof (args as any).includeContent === 'boolean')
+            ('limit' in args && typeof (args as Record<string, unknown>).limit === 'number') &&
+            ('includeContent' in args && typeof (args as Record<string, unknown>).includeContent === 'boolean')
           );
           
           // Only apply auto-limit if maxContentLength is not explicitly set (including 0)
@@ -100,25 +101,25 @@ class WebSearchMCPServer {
           
           const maxLength = validatedArgs.maxContentLength;
           
-          result.results.forEach((result, index) => {
-            responseText += `**${index + 1}. ${result.title}**\n`;
-            responseText += `URL: ${result.url}\n`;
-            responseText += `Description: ${result.description}\n`;
+          result.results.forEach((searchResult, idx) => {
+            responseText += `**${idx + 1}. ${searchResult.title}**\n`;
+            responseText += `URL: ${searchResult.url}\n`;
+            responseText += `Description: ${searchResult.description}\n`;
             
-            if (result.fullContent && result.fullContent.trim()) {
-              let content = result.fullContent;
+            if (searchResult.fullContent && searchResult.fullContent.trim()) {
+              let content = searchResult.fullContent;
               if (maxLength && maxLength > 0 && content.length > maxLength) {
                 content = content.substring(0, maxLength) + `\n\n[Content truncated at ${maxLength} characters]`;
               }
               responseText += `\n**Full Content:**\n${content}\n`;
-            } else if (result.contentPreview && result.contentPreview.trim()) {
-              let content = result.contentPreview;
+            } else if (searchResult.contentPreview && searchResult.contentPreview.trim()) {
+              let content = searchResult.contentPreview;
               if (maxLength && maxLength > 0 && content.length > maxLength) {
                 content = content.substring(0, maxLength) + `\n\n[Content truncated at ${maxLength} characters]`;
               }
               responseText += `\n**Content Preview:**\n${content}\n`;
-            } else if (result.fetchStatus === 'error') {
-              responseText += `\n**Content Extraction Failed:** ${result.error}\n`;
+            } else if (searchResult.fetchStatus === 'error') {
+              responseText += `\n**Content Extraction Failed:** ${searchResult.error}\n`;
             }
             
             responseText += `\n---\n\n`;
@@ -178,10 +179,9 @@ class WebSearchMCPServer {
           }
 
           console.log(`[MCP] Starting web search summaries...`);
-          const startTime = Date.now();
           
           // Use existing search engine to get results with snippets
-          const searchResults = await this.searchEngine.search({
+          const searchResponse = await this.searchEngine.search({
             query: obj.query,
             numResults: limit,
           });
@@ -189,11 +189,11 @@ class WebSearchMCPServer {
           // const searchTime = Date.now() - startTime; // Unused for now
 
           // Convert to summary format (no content extraction)
-          const summaryResults = searchResults.map(result => ({
-            title: result.title,
-            url: result.url,
-            description: result.description,
-            timestamp: result.timestamp,
+          const summaryResults = searchResponse.results.map(item => ({
+            title: item.title,
+            url: item.url,
+            description: item.description,
+            timestamp: item.timestamp,
           }));
 
           console.log(`[MCP] Search summaries completed, found ${summaryResults.length} results`);
@@ -201,10 +201,10 @@ class WebSearchMCPServer {
           // Format the results as text
           let responseText = `Search summaries for "${obj.query}" with ${summaryResults.length} results:\n\n`;
           
-          summaryResults.forEach((result, index) => {
-            responseText += `**${index + 1}. ${result.title}**\n`;
-            responseText += `URL: ${result.url}\n`;
-            responseText += `Description: ${result.description}\n`;
+          summaryResults.forEach((summary, i) => {
+            responseText += `**${i + 1}. ${summary.title}**\n`;
+            responseText += `URL: ${summary.url}\n`;
+            responseText += `Description: ${summary.description}\n`;
             responseText += `\n---\n\n`;
           });
 
@@ -348,6 +348,8 @@ class WebSearchMCPServer {
   private async handleWebSearch(input: WebSearchToolInput): Promise<WebSearchToolOutput> {
     const startTime = Date.now();
     const { query, limit = 5, includeContent = true } = input;
+    
+    console.error(`[MCP] DEBUG: handleWebSearch called with limit=${limit}, includeContent=${includeContent}`);
 
     try {
       // Request extra search results to account for potential PDF files that will be skipped
@@ -357,15 +359,35 @@ class WebSearchMCPServer {
       console.log(`[MCP] Requesting ${searchLimit} search results to get ${limit} non-PDF content results`);
       
       // Perform the search
-      const searchResults = await this.searchEngine.search({
+      const searchResponse = await this.searchEngine.search({
         query,
         numResults: searchLimit,
       });
+      const searchResults = searchResponse.results;
+      
+      console.error(`[MCP] DEBUG: About to log search summary, searchResults.length=${searchResults.length}`);
+      
+      // Log search summary
+      const pdfCount = searchResults.filter(result => isPdfUrl(result.url)).length;
+      const followedCount = searchResults.length - pdfCount;
+      console.error(`[MCP] Search engine: ${searchResponse.engine}; ${limit} requested/${searchResults.length} obtained; PDF: ${pdfCount}; ${followedCount} followed.`);
 
       // Extract content from each result if requested, with target count
       const enhancedResults = includeContent 
         ? await this.contentExtractor.extractContentForResults(searchResults, limit)
         : searchResults.slice(0, limit); // If not extracting content, just take the first 'limit' results
+      
+      // Log extraction summary with failure reasons
+      if (includeContent) {
+        const successCount = enhancedResults.filter(r => r.fetchStatus === 'success').length;
+        const failedResults = enhancedResults.filter(r => r.fetchStatus === 'error');
+        const failedCount = failedResults.length;
+        
+        const failureReasons = this.categorizeFailureReasons(failedResults);
+        const failureReasonText = failureReasons.length > 0 ? ` (${failureReasons.join(', ')})` : '';
+        
+        console.error(`[MCP] Links requested: ${limit}; Successfully extracted: ${successCount}; Failed: ${failedCount}${failureReasonText}; Results: ${enhancedResults.length}.`);
+      }
 
       const searchTime = Date.now() - startTime;
 
@@ -379,6 +401,52 @@ class WebSearchMCPServer {
       console.error('Web search error:', error);
       throw new Error(`Web search failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  private categorizeFailureReasons(failedResults: SearchResult[]): string[] {
+    const reasonCounts = new Map<string, number>();
+    
+    failedResults.forEach(result => {
+      if (result.error) {
+        const category = this.categorizeError(result.error);
+        reasonCounts.set(category, (reasonCounts.get(category) || 0) + 1);
+      }
+    });
+    
+    return Array.from(reasonCounts.entries()).map(([reason, count]) => 
+      count > 1 ? `${reason} (${count})` : reason
+    );
+  }
+
+  private categorizeError(errorMessage: string): string {
+    const lowerError = errorMessage.toLowerCase();
+    
+    if (lowerError.includes('timeout') || lowerError.includes('timed out')) {
+      return 'Timeout';
+    }
+    if (lowerError.includes('403') || lowerError.includes('forbidden')) {
+      return 'Access denied';
+    }
+    if (lowerError.includes('404') || lowerError.includes('not found')) {
+      return 'Not found';
+    }
+    if (lowerError.includes('bot') || lowerError.includes('captcha') || lowerError.includes('unusual traffic')) {
+      return 'Bot detection';
+    }
+    if (lowerError.includes('too large') || lowerError.includes('content length') || lowerError.includes('maxcontentlength')) {
+      return 'Content too long';
+    }
+    if (lowerError.includes('ssl') || lowerError.includes('certificate') || lowerError.includes('tls')) {
+      return 'SSL error';
+    }
+    if (lowerError.includes('network') || lowerError.includes('connection') || lowerError.includes('econnrefused')) {
+      return 'Network error';
+    }
+    if (lowerError.includes('dns') || lowerError.includes('hostname')) {
+      return 'DNS error';
+    }
+    
+    return 'Other error';
   }
 
   async run(): Promise<void> {

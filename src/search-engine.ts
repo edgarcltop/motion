@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import { SearchOptions, SearchResult } from './types.js';
+import { SearchOptions, SearchResult, SearchResultWithMetadata } from './types.js';
 import { generateTimestamp, sanitizeQuery } from './utils.js';
 import { RateLimiter } from './rate-limiter.js';
 
@@ -13,7 +13,7 @@ export class SearchEngine {
     this.rateLimiter = new RateLimiter(10); // 10 requests per minute
   }
 
-  async search(options: SearchOptions): Promise<SearchResult[]> {
+  async search(options: SearchOptions): Promise<SearchResultWithMetadata> {
     const { query, numResults = 5, timeout = 10000 } = options;
     const sanitizedQuery = sanitizeQuery(query);
     
@@ -25,25 +25,25 @@ export class SearchEngine {
         
         // Try multiple approaches to get search results
         const approaches = [
-          this.tryGoogleSearch.bind(this),
-          this.tryAlternativeSearch.bind(this),
-          this.tryDuckDuckGoSearch.bind(this)
+          { method: this.tryGoogleSearch.bind(this), name: 'Google' },
+          { method: this.tryAlternativeSearch.bind(this), name: 'Alternative Google' },
+          { method: this.tryDuckDuckGoSearch.bind(this), name: 'DuckDuckGo' }
         ];
         
         for (const approach of approaches) {
           try {
-            const results = await approach(sanitizedQuery, numResults, timeout);
+            const results = await approach.method(sanitizedQuery, numResults, timeout);
             if (results.length > 0) {
-              console.log(`[SearchEngine] Found ${results.length} results with approach`);
-              return results;
+              console.log(`[SearchEngine] Found ${results.length} results with ${approach.name}`);
+              return { results, engine: approach.name };
             }
           } catch (error) {
-            console.error(`[SearchEngine] Approach failed:`, error);
+            console.error(`[SearchEngine] ${approach.name} approach failed:`, error);
           }
         }
         
         console.log(`[SearchEngine] All approaches failed, returning empty results`);
-        return [];
+        return { results: [], engine: 'None' };
       });
     } catch (error) {
       console.error('[SearchEngine] Search error:', error);

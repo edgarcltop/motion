@@ -79,7 +79,7 @@ export class ContentExtractor {
         }
       }
       
-      throw new Error(`Failed to extract content from ${url}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Failed to extract content from ${url}: ${this.getSpecificErrorMessage(error)}`);
     }
   }
 
@@ -127,7 +127,7 @@ export class ContentExtractor {
           wordCount: 0,
           timestamp: generateTimestamp(),
           fetchStatus: 'error' as const,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: this.getSpecificErrorMessage(error),
         });
       }
     }
@@ -233,5 +233,28 @@ export class ContentExtractor {
     text = text.trim();
     
     return text;
+  }
+
+  private getSpecificErrorMessage(error: unknown): string {
+    if (axios.isAxiosError(error)) {
+      if (error.code === 'ECONNABORTED') {
+        return 'Request timeout';
+      }
+      if (error.response?.status === 403) {
+        return '403 Forbidden - Access denied';
+      }
+      if (error.response?.status === 404) {
+        return '404 Not found';
+      }
+      if (error.message.includes('maxContentLength')) {
+        return 'Content too long';
+      }
+      if (error.response?.status) {
+        return `HTTP ${error.response.status}: ${error.message}`;
+      }
+      return `Network error: ${error.message}`;
+    }
+    
+    return error instanceof Error ? error.message : 'Unknown error';
   }
 }
