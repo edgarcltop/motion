@@ -66,11 +66,17 @@ export class EnhancedContentExtractor {
     const response = await axios.get(url, {
       headers: this.getRandomHeaders(),
       timeout,
-      maxContentLength,
+      // Remove maxContentLength from axios config - handle truncation manually
       validateStatus: (status: number) => status < 400,
     });
 
-    const content = this.parseContent(response.data);
+    let content = this.parseContent(response.data);
+    
+    // Truncate content if it exceeds the limit (instead of axios throwing an error)
+    if (maxContentLength && content.length > maxContentLength) {
+      console.log(`[EnhancedContentExtractor] Content truncated from ${content.length} to ${maxContentLength} characters for ${url}`);
+      content = content.substring(0, maxContentLength);
+    }
     
     // Check if we got a meaningful response
     if (this.isLowQualityContent(content)) {

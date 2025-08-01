@@ -17,7 +17,7 @@ class WebSearchMCPServer {
   constructor() {
     this.server = new McpServer({
       name: 'web-search-mcp',
-      version: '0.2.2',
+      version: '0.3.0',
     });
 
     this.searchEngine = new SearchEngine();
@@ -360,14 +360,14 @@ class WebSearchMCPServer {
     const startTime = Date.now();
     const { query, limit = 5, includeContent = true } = input;
     
-    console.error(`[MCP] DEBUG: handleWebSearch called with limit=${limit}, includeContent=${includeContent}`);
+    console.error(`[web-search-mcp] DEBUG: handleWebSearch called with limit=${limit}, includeContent=${includeContent}`);
 
     try {
       // Request extra search results to account for potential PDF files that will be skipped
       // Request up to 2x the limit or at least 5 extra results, capped at 10 (Google's max)
       const searchLimit = includeContent ? Math.min(limit * 2 + 2, 10) : limit;
       
-      console.log(`[MCP] Requesting ${searchLimit} search results to get ${limit} non-PDF content results`);
+      console.log(`[web-search-mcp] DEBUG: Requesting ${searchLimit} search results to get ${limit} non-PDF content results`);
       
       // Perform the search
       const searchResponse = await this.searchEngine.search({
@@ -379,7 +379,7 @@ class WebSearchMCPServer {
       // Log search summary
       const pdfCount = searchResults.filter(result => isPdfUrl(result.url)).length;
       const followedCount = searchResults.length - pdfCount;
-      console.error(`[MCP] Search engine: ${searchResponse.engine}; ${limit} requested/${searchResults.length} obtained; PDF: ${pdfCount}; ${followedCount} followed.`);
+      console.error(`[web-search-mcp] DEBUG: Search engine: ${searchResponse.engine}; ${limit} requested/${searchResults.length} obtained; PDF: ${pdfCount}; ${followedCount} followed.`);
 
       // Extract content from each result if requested, with target count
       const enhancedResults = includeContent 
