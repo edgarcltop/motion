@@ -4,18 +4,11 @@ A TypeScript MCP (Model Context Protocol) server that provides comprehensive web
 
 ## Features
 
-- **Enhanced Bot Detection Avoidance**: Intelligent fallback system using Playwright headless browsers when traditional HTTP requests fail
 - **Multi-Engine Web Search**: Prioritizes Bing > Brave > DuckDuckGo for optimal reliability and performance
-- **Smart Request Strategy**: Uses fast axios requests first, then falls back to browser-based extraction when bot detection is encountered
-- **Full Page Content Extraction**: Fetches and extracts complete page content from search results with human-like behavior simulation
-- **Concurrent Processing**: Extracts content from multiple pages simultaneously with intelligent timeout management
-- **HTTP/2 Error Recovery**: Automatically handles protocol errors with fallback to HTTP/1.1
-- **Memory Leak Prevention**: Proper browser cleanup prevents EventEmitter memory leaks
+- **Full Page Content Extraction**: Fetches and extracts complete page content from search results
 - **Multiple Search Tools**: Three specialised tools for different use cases
-- **Browser Pool Management**: Efficient browser instance management with automatic cleanup and rotation
-- **MCP Protocol Compliance**: Implements the Model Context Protocol for seamless integration with AI assistants
-- **TypeScript**: Built with TypeScript for type safety and better development experience
-- **CLI Executable**: Can be run as a standalone CLI tool or integrated with MCP clients
+- **Smart Request Strategy**: Uses fast axios requests first, then falls back to browser-based extraction if bot detection is encountered
+- **Concurrent Processing**: Extracts content from multiple pages simultaneously
 
 ## How It Works
 
@@ -23,9 +16,9 @@ The server provides three specialised tools for different web search needs:
 
 ### 1. `full-web-search` (Main Tool)
 When a comprehensive search is requested, the server uses an **optimized search strategy**:
-1. **Browser-based Bing Search** - Primary method using Playwright with excellent reliability
-2. **Browser-based Brave Search** - Secondary option with good performance
-3. **Axios DuckDuckGo Search** - Final fallback using traditional HTTP (proven reliable)
+1. **Browser-based Bing Search** - Primary method using Playwright
+2. **Browser-based Brave Search** - Secondary option
+3. **Axios DuckDuckGo Search** - Final fallback using traditional HTTP
 4. **Content extraction**: Tries axios first, then falls back to browser with human behavior simulation
 5. **Concurrent processing**: Extracts content from multiple pages simultaneously with timeout protection
 6. **HTTP/2 error recovery**: Automatically falls back to HTTP/1.1 when protocol errors occur
@@ -35,7 +28,6 @@ For quick search results without full content extraction:
 1. Performs the same optimized multi-engine search as `full-web-search`
 2. Returns only the search result snippets/descriptions
 3. Does not follow links to extract full page content
-4. **Automatic browser cleanup**: Prevents memory leaks by properly closing browsers after search
 
 ### 3. `get-single-web-page-content` (Utility Tool)
 For extracting content from a specific webpage:
@@ -122,7 +114,6 @@ The server supports several environment variables for configuration:
 
 - **`MAX_CONTENT_LENGTH`**: Maximum content length in characters (default: 500000)
 - **`DEFAULT_TIMEOUT`**: Default timeout for requests in milliseconds (default: 6000)
-- **`BROWSER_HEADLESS`**: Run browsers in headless mode (default: true, set to 'false' for visible browsers)
 - **`MAX_BROWSERS`**: Maximum number of browser instances to maintain (default: 3)
 - **`BROWSER_TYPES`**: Comma-separated list of browser types to use (default: 'chromium,firefox', options: chromium, firefox, webkit)
 - **`BROWSER_FALLBACK_THRESHOLD`**: Number of axios failures before using browser fallback (default: 3)
@@ -261,4 +252,3 @@ This is an open source project and we welcome feedback! If you encounter any iss
 
 - Open an issue on GitHub
 - Submit a pull request
-- Share your experience with different models or MCP clients
