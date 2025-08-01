@@ -4,9 +4,15 @@ A TypeScript MCP (Model Context Protocol) server that provides comprehensive web
 
 ## Features
 
-- **Multi-Engine Web Search**: Tries Google Search first, and automatically falls back to DuckDuckGo if Google fails (e.g., due to bot detection or no results)
-- **Full Page Content Extraction**: Fetches and extracts complete page content from search results
+- **Enhanced Bot Detection Avoidance**: Intelligent fallback system using Playwright headless browsers when traditional HTTP requests fail
+- **Multi-Engine Web Search**: Prioritizes Bing > Brave > DuckDuckGo for optimal reliability and performance
+- **Smart Request Strategy**: Uses fast axios requests first, then falls back to browser-based extraction when bot detection is encountered
+- **Full Page Content Extraction**: Fetches and extracts complete page content from search results with human-like behavior simulation
+- **Concurrent Processing**: Extracts content from multiple pages simultaneously with intelligent timeout management
+- **HTTP/2 Error Recovery**: Automatically handles protocol errors with fallback to HTTP/1.1
+- **Memory Leak Prevention**: Proper browser cleanup prevents EventEmitter memory leaks
 - **Multiple Search Tools**: Three specialised tools for different use cases
+- **Browser Pool Management**: Efficient browser instance management with automatic cleanup and rotation
 - **MCP Protocol Compliance**: Implements the Model Context Protocol for seamless integration with AI assistants
 - **TypeScript**: Built with TypeScript for type safety and better development experience
 - **CLI Executable**: Can be run as a standalone CLI tool or integrated with MCP clients
@@ -16,16 +22,20 @@ A TypeScript MCP (Model Context Protocol) server that provides comprehensive web
 The server provides three specialised tools for different web search needs:
 
 ### 1. `full-web-search` (Main Tool)
-When a comprehensive search is requested, the server:
-1. Attempts to fetch results from Google Search.
-2. If Google returns a bot detection page, fails, or returns no results, it automatically retries the search using DuckDuckGo.
-3. Extracts and returns the full content from the top results of whichever engine succeeded.
+When a comprehensive search is requested, the server uses an **optimized search strategy**:
+1. **Browser-based Bing Search** - Primary method using Playwright with excellent reliability
+2. **Browser-based Brave Search** - Secondary option with good performance
+3. **Axios DuckDuckGo Search** - Final fallback using traditional HTTP (proven reliable)
+4. **Content extraction**: Tries axios first, then falls back to browser with human behavior simulation
+5. **Concurrent processing**: Extracts content from multiple pages simultaneously with timeout protection
+6. **HTTP/2 error recovery**: Automatically falls back to HTTP/1.1 when protocol errors occur
 
 ### 2. `get-web-search-summaries` (Lightweight Alternative)
 For quick search results without full content extraction:
-1. Performs the same multi-engine search as `full-web-search`
+1. Performs the same optimized multi-engine search as `full-web-search`
 2. Returns only the search result snippets/descriptions
 3. Does not follow links to extract full page content
+4. **Automatic browser cleanup**: Prevents memory leaks by properly closing browsers after search
 
 ### 3. `get-single-web-page-content` (Utility Tool)
 For extracting content from a specific webpage:
@@ -96,12 +106,45 @@ Older models (even those with tool use specified) may not work or may work errat
       "command": "node",
       "args": ["/path/to/web-search-mcp/dist/index.js"],
       "env": {
-        "MAX_CONTENT_LENGTH": "10000"
+        "MAX_CONTENT_LENGTH": "10000",
+        "BROWSER_HEADLESS": "true",
+        "MAX_BROWSERS": "3",
+        "BROWSER_FALLBACK_THRESHOLD": "3"
       }
     }
   }
 }
 ```
+
+## Environment Variables
+
+The server supports several environment variables for configuration:
+
+- **`MAX_CONTENT_LENGTH`**: Maximum content length in characters (default: 500000)
+- **`DEFAULT_TIMEOUT`**: Default timeout for requests in milliseconds (default: 6000)
+- **`BROWSER_HEADLESS`**: Run browsers in headless mode (default: true, set to 'false' for visible browsers)
+- **`MAX_BROWSERS`**: Maximum number of browser instances to maintain (default: 3)
+- **`BROWSER_TYPES`**: Comma-separated list of browser types to use (default: 'chromium,firefox', options: chromium, firefox, webkit)
+- **`BROWSER_FALLBACK_THRESHOLD`**: Number of axios failures before using browser fallback (default: 3)
+
+## Troubleshooting
+
+### Slow Response Times
+- **Optimized timeouts**: Default timeout reduced to 6 seconds with concurrent processing for faster results
+- **Concurrent extraction**: Content is now extracted from multiple pages simultaneously
+- **Reduce timeouts further**: Set `DEFAULT_TIMEOUT=4000` for even faster responses (may reduce success rate)
+- **Use fewer browsers**: Set `MAX_BROWSERS=1` to reduce memory usage
+
+### Search Failures
+- **Check browser installation**: Run `npx playwright install` to ensure browsers are available
+- **Try headless mode**: Ensure `BROWSER_HEADLESS=true` (default) for server environments
+- **Network restrictions**: Some networks block browser automation - try different network or VPN
+- **HTTP/2 issues**: The server automatically handles HTTP/2 protocol errors with fallback to HTTP/1.1
+
+### Memory Usage
+- **Automatic cleanup**: Browsers are automatically cleaned up after each operation to prevent memory leaks
+- **Limit browsers**: Reduce `MAX_BROWSERS` (default: 3)
+- **EventEmitter warnings**: Fixed - browsers are properly closed to prevent listener accumulation
 
 ## For Development
 ```bash
@@ -143,9 +186,10 @@ This server provides three specialised tools for different web search needs:
 ### 1. `full-web-search` (Main Tool)
 The most comprehensive web search tool that:
 1. Takes a search query and optional number of results (1-10, default 5)
-2. Performs a web search (tries Google, then DuckDuckGo if needed)
-3. Fetches full page content from each result URL
+2. Performs a web search (tries Bing, then Brave, then DuckDuckGo if needed)
+3. Fetches full page content from each result URL with concurrent processing
 4. Returns structured data with search results and extracted content
+5. **Enhanced reliability**: HTTP/2 error recovery, reduced timeouts, and better error handling
 
 **Example Usage:**
 ```json
@@ -162,7 +206,7 @@ The most comprehensive web search tool that:
 ### 2. `get-web-search-summaries` (Lightweight Alternative)
 A lightweight alternative for quick search results:
 1. Takes a search query and optional number of results (1-10, default 5)
-2. Performs the same multi-engine search as `full-web-search`
+2. Performs the same optimized multi-engine search as `full-web-search`
 3. Returns only search result snippets/descriptions (no content extraction)
 4. Faster and more efficient for quick research
 

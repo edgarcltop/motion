@@ -9,7 +9,7 @@
     "web-search-mcp": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc && node scripts/bundle.js",
+    "build": "tsc && echo '✅ TypeScript compilation complete: dist/index.js'",
     "dev": "tsx watch src/index.ts",
     "start": "node ./dist/index.js",
     "lint": "eslint \"src/**/*.ts\"",
@@ -31,7 +31,8 @@
     "axios": "^1.6.8",
     "cheerio": "^1.0.0-rc.12",
     "p-limit": "^6.2.0",
-    "p-retry": "^6.2.1"
+    "p-retry": "^6.2.1",
+    "playwright": "^1.48.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",

@@ -41,7 +41,17 @@ try {
       'timers',
       'tty',
       'vm',
-      'worker_threads'
+      'worker_threads',
+      // External npm packages that should not be bundled
+      'playwright',
+      'playwright-core',
+      'chromium-bidi',
+      // Additional externals to prevent bundling issues
+      'form-data',
+      'combined-stream',
+      'mime-types',
+      'mime-db',
+      'axios'
     ],
     sourcemap: true,
     minify: false, // Keep readable for debugging

@@ -5,14 +5,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { SearchEngine } from './search-engine.js';
-import { ContentExtractor } from './content-extractor.js';
+import { EnhancedContentExtractor } from './enhanced-content-extractor.js';
 import { WebSearchToolInput, WebSearchToolOutput, SearchResult } from './types.js';
 import { isPdfUrl } from './utils.js';
 
 class WebSearchMCPServer {
   private server: McpServer;
   private searchEngine: SearchEngine;
-  private contentExtractor: ContentExtractor;
+  private contentExtractor: EnhancedContentExtractor;
 
   constructor() {
     this.server = new McpServer({
@@ -21,9 +21,10 @@ class WebSearchMCPServer {
     });
 
     this.searchEngine = new SearchEngine();
-    this.contentExtractor = new ContentExtractor();
+    this.contentExtractor = new EnhancedContentExtractor();
 
     this.setupTools();
+    this.setupGracefulShutdown();
   }
 
   private setupTools(): void {
@@ -94,7 +95,7 @@ class WebSearchMCPServer {
           console.log(`[MCP] Starting web search...`);
           const result = await this.handleWebSearch(validatedArgs);
           
-          console.log(`[MCP] Search completed, result:`, JSON.stringify(result, null, 2));
+          console.log(`[MCP] Search completed, found ${result.results.length} results`);
           
           // Format the results as a comprehensive text response
           let responseText = `Search completed for "${result.query}" with ${result.total_results} results:\n\n`;
@@ -180,42 +181,52 @@ class WebSearchMCPServer {
 
           console.log(`[MCP] Starting web search summaries...`);
           
-          // Use existing search engine to get results with snippets
-          const searchResponse = await this.searchEngine.search({
-            query: obj.query,
-            numResults: limit,
-          });
+          try {
+            // Use existing search engine to get results with snippets
+            const searchResponse = await this.searchEngine.search({
+              query: obj.query,
+              numResults: limit,
+            });
 
-          // const searchTime = Date.now() - startTime; // Unused for now
+            // const searchTime = Date.now() - startTime; // Unused for now
 
-          // Convert to summary format (no content extraction)
-          const summaryResults = searchResponse.results.map(item => ({
-            title: item.title,
-            url: item.url,
-            description: item.description,
-            timestamp: item.timestamp,
-          }));
+            // Convert to summary format (no content extraction)
+            const summaryResults = searchResponse.results.map(item => ({
+              title: item.title,
+              url: item.url,
+              description: item.description,
+              timestamp: item.timestamp,
+            }));
 
-          console.log(`[MCP] Search summaries completed, found ${summaryResults.length} results`);
+            console.log(`[MCP] Search summaries completed, found ${summaryResults.length} results`);
+            
+            // Format the results as text
+            let responseText = `Search summaries for "${obj.query}" with ${summaryResults.length} results:\n\n`;
+            
+            summaryResults.forEach((summary, i) => {
+              responseText += `**${i + 1}. ${summary.title}**\n`;
+              responseText += `URL: ${summary.url}\n`;
+              responseText += `Description: ${summary.description}\n`;
+              responseText += `\n---\n\n`;
+            });
 
-          // Format the results as text
-          let responseText = `Search summaries for "${obj.query}" with ${summaryResults.length} results:\n\n`;
-          
-          summaryResults.forEach((summary, i) => {
-            responseText += `**${i + 1}. ${summary.title}**\n`;
-            responseText += `URL: ${summary.url}\n`;
-            responseText += `Description: ${summary.description}\n`;
-            responseText += `\n---\n\n`;
-          });
-
-          return {
-            content: [
-              {
-                type: 'text' as const,
-                text: responseText,
-              },
-            ],
-          };
+            return {
+              content: [
+                {
+                  type: 'text' as const,
+                  text: responseText,
+                },
+              ],
+            };
+          } finally {
+            // Ensure browsers are cleaned up after search-only operations
+            // This prevents EventEmitter memory leaks when browsers accumulate listeners
+            try {
+              await this.searchEngine.closeAll();
+            } catch (cleanupError) {
+              console.error(`[MCP] Error during browser cleanup:`, cleanupError);
+            }
+          }
         } catch (error) {
           console.error(`[MCP] Error in get-web-search-summaries tool handler:`, error);
           throw error;
@@ -365,8 +376,6 @@ class WebSearchMCPServer {
       });
       const searchResults = searchResponse.results;
       
-      console.error(`[MCP] DEBUG: About to log search summary, searchResults.length=${searchResults.length}`);
-      
       // Log search summary
       const pdfCount = searchResults.filter(result => isPdfUrl(result.url)).length;
       const followedCount = searchResults.length - pdfCount;
@@ -447,6 +456,47 @@ class WebSearchMCPServer {
     }
     
     return 'Other error';
+  }
+
+  private setupGracefulShutdown(): void {
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      // Don't exit on unhandled rejections, just log them
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      // Don't exit on uncaught exceptions in MCP context
+    });
+
+    // Graceful shutdown - close browsers when process exits
+    process.on('SIGINT', async () => {
+      console.log('Shutting down gracefully...');
+      try {
+        await Promise.all([
+          this.contentExtractor.closeAll(),
+          this.searchEngine.closeAll()
+        ]);
+      } catch (error) {
+        console.error('Error during graceful shutdown:', error);
+      }
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', async () => {
+      console.log('Shutting down gracefully...');
+      try {
+        await Promise.all([
+          this.contentExtractor.closeAll(),
+          this.searchEngine.closeAll()
+        ]);
+      } catch (error) {
+        console.error('Error during graceful shutdown:', error);
+      }
+      process.exit(0);
+    });
   }
 
   async run(): Promise<void> {
