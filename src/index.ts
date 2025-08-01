@@ -395,7 +395,7 @@ class WebSearchMCPServer {
         const failureReasons = this.categorizeFailureReasons(failedResults);
         const failureReasonText = failureReasons.length > 0 ? ` (${failureReasons.join(', ')})` : '';
         
-        console.error(`[MCP] Links requested: ${limit}; Successfully extracted: ${successCount}; Failed: ${failedCount}${failureReasonText}; Results: ${enhancedResults.length}.`);
+        console.error(`[web-search-mcp] DEBUG: Links requested: ${limit}; Successfully extracted: ${successCount}; Failed: ${failedCount}${failureReasonText}; Results: ${enhancedResults.length}.`);
       }
 
       const searchTime = Date.now() - startTime;
