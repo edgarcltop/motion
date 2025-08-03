@@ -6,6 +6,7 @@ export class BrowserPool {
   private browserTypes: string[];
   private currentBrowserIndex = 0;
   private headless: boolean;
+  private lastUsedBrowserType: string = '';
 
   constructor() {
     // Read configuration from environment variables
@@ -23,6 +24,7 @@ export class BrowserPool {
     // Rotate between browser types for variety
     const browserType = this.browserTypes[this.currentBrowserIndex % this.browserTypes.length];
     this.currentBrowserIndex++;
+    this.lastUsedBrowserType = browserType;
 
     if (this.browsers.has(browserType)) {
       const browser = this.browsers.get(browserType)!;
@@ -110,5 +112,9 @@ export class BrowserPool {
     
     await Promise.all(closePromises);
     this.browsers.clear();
+  }
+
+  getLastUsedBrowserType(): string {
+    return this.lastUsedBrowserType;
   }
 }

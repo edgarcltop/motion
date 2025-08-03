@@ -90,10 +90,11 @@ export class EnhancedContentExtractor {
     const { url, timeout = this.defaultTimeout } = options;
     
     const browser = await this.browserPool.getBrowser();
+    const browserType = this.browserPool.getLastUsedBrowserType();
     
     try {
-      // Create a new context for each request (isolation)
-      const context = await browser.newContext({
+      // Create context options based on browser capabilities
+      const baseContextOptions = {
         userAgent: this.getRandomUserAgent(),
         viewport: this.getRandomViewport(),
         locale: 'en-US',
@@ -101,8 +102,15 @@ export class EnhancedContentExtractor {
         // Simulate real device characteristics
         deviceScaleFactor: Math.random() > 0.5 ? 1 : 2,
         hasTouch: Math.random() > 0.7,
-        isMobile: Math.random() > 0.8,
-      });
+      };
+
+      // Firefox doesn't support isMobile option
+      const contextOptions = browserType === 'firefox' 
+        ? baseContextOptions 
+        : { ...baseContextOptions, isMobile: Math.random() > 0.8 };
+
+      // Create a new context for each request (isolation)
+      const context = await browser.newContext(contextOptions);
 
       // Add stealth scripts to avoid detection
       await context.addInitScript(() => {
