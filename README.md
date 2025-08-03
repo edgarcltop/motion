@@ -63,9 +63,10 @@ Older models (even those with tool use specified) may not work or may work errat
 3. **Open a terminal in the extracted folder and run:**
    ```bash
    npm install
+   npx playwright install
    npm run build
    ```
-   This will create a `node_modules` folder with all required dependencies and build the project.
+   This will create a `node_modules` folder with all required dependencies, install Playwright browsers, and build the project.
 4. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
 
 ```json
@@ -142,6 +143,7 @@ The server supports several environment variables for configuration:
 git clone https://github.com/mrkrsl/web-search-mcp.git
 cd web-search-mcp
 npm install
+npx playwright install
 npm run build
 ```
 
