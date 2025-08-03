@@ -24,6 +24,13 @@ export class SearchEngine {
       return await this.rateLimiter.execute(async () => {
         console.log(`[SearchEngine] Starting search with multiple engines...`);
         
+        // Configuration from environment variables
+        const enableQualityCheck = process.env.ENABLE_RELEVANCE_CHECKING !== 'false';
+        const qualityThreshold = parseFloat(process.env.RELEVANCE_THRESHOLD || '0.3');
+        const forceMultiEngine = process.env.FORCE_MULTI_ENGINE_SEARCH === 'true';
+        
+        console.log(`[SearchEngine] Quality checking: ${enableQualityCheck}, threshold: ${qualityThreshold}, multi-engine: ${forceMultiEngine}`);
+
         // Try multiple approaches to get search results, starting with most reliable
         const approaches = [
           { method: this.tryBrowserBingSearch.bind(this), name: 'Browser Bing' },
@@ -31,14 +38,53 @@ export class SearchEngine {
           { method: this.tryDuckDuckGoSearch.bind(this), name: 'Axios DuckDuckGo' }
         ];
         
+        let bestResults: SearchResult[] = [];
+        let bestEngine = 'None';
+        let bestQuality = 0;
+        
         for (const approach of approaches) {
           try {
-            // Use shorter timeout per approach to allow trying all methods
-            const approachTimeout = Math.min(timeout / 2, 6000); // Max 6 seconds per approach
+            // Use more aggressive timeouts for faster fallback
+            const approachTimeout = Math.min(timeout / 3, 4000); // Max 4 seconds per approach for faster fallback
             const results = await approach.method(sanitizedQuery, numResults, approachTimeout);
             if (results.length > 0) {
               console.log(`[SearchEngine] Found ${results.length} results with ${approach.name}`);
-              return { results, engine: approach.name };
+              
+              // Validate result quality to detect irrelevant results
+              const qualityScore = enableQualityCheck ? this.assessResultQuality(results, sanitizedQuery) : 1.0;
+              console.log(`[SearchEngine] ${approach.name} quality score: ${qualityScore.toFixed(2)}/1.0`);
+              
+              // Track the best results so far
+              if (qualityScore > bestQuality) {
+                bestResults = results;
+                bestEngine = approach.name;
+                bestQuality = qualityScore;
+              }
+              
+              // If quality is excellent, return immediately (unless forcing multi-engine)
+              if (qualityScore >= 0.8 && !forceMultiEngine) {
+                console.log(`[SearchEngine] Excellent quality results from ${approach.name}, returning immediately`);
+                return { results, engine: approach.name };
+              }
+              
+              // If quality is acceptable and this isn't Bing (first engine), return
+              if (qualityScore >= qualityThreshold && approach.name !== 'Browser Bing' && !forceMultiEngine) {
+                console.log(`[SearchEngine] Good quality results from ${approach.name}, using as primary`);
+                return { results, engine: approach.name };
+              }
+              
+              // If this is the last engine or quality is acceptable, prepare to return
+              if (approach === approaches[approaches.length - 1]) {
+                if (bestQuality >= qualityThreshold || !enableQualityCheck) {
+                  console.log(`[SearchEngine] Using best results from ${bestEngine} (quality: ${bestQuality.toFixed(2)})`);
+                  return { results: bestResults, engine: bestEngine };
+                } else if (bestResults.length > 0) {
+                  console.log(`[SearchEngine] Warning: Low quality results from all engines, using best available from ${bestEngine}`);
+                  return { results: bestResults, engine: bestEngine };
+                }
+              } else {
+                console.log(`[SearchEngine] ${approach.name} results quality: ${qualityScore.toFixed(2)}, continuing to try other engines...`);
+              }
             }
           } catch (error) {
             console.error(`[SearchEngine] ${approach.name} approach failed:`, error);
@@ -118,46 +164,132 @@ export class SearchEngine {
     const browser = await this.browserPool.getBrowser();
     
     try {
+      // Enhanced browser context with more realistic fingerprinting
       const context = await browser.newContext({
         userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
         viewport: { width: 1366, height: 768 },
         locale: 'en-US',
         timezoneId: 'America/New_York',
+        colorScheme: 'light',
+        deviceScaleFactor: 1,
+        hasTouch: false,
+        isMobile: false,
+        extraHTTPHeaders: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'DNT': '1',
+          'Upgrade-Insecure-Requests': '1',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': 'none'
+        }
       });
 
       const page = await context.newPage();
       
-      // Navigate to Bing search
-      const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.min(numResults, 10)}`;
-      console.log(`[SearchEngine] Browser navigating to Bing: ${searchUrl}`);
-      
-      await page.goto(searchUrl, { 
-        waitUntil: 'domcontentloaded',
-        timeout: timeout
-      });
-
-      // Wait for search results to load
+      // Try enhanced Bing search with proper web interface flow
       try {
-        await page.waitForSelector('.b_algo, .b_result', { timeout: 3000 });
-      } catch {
-        console.log(`[SearchEngine] Browser Bing results selector not found, proceeding anyway`);
+        const results = await this.tryEnhancedBingSearch(page, query, numResults, timeout);
+        await context.close();
+        return results;
+      } catch (enhancedError) {
+        console.log(`[SearchEngine] Enhanced Bing search failed, trying fallback: ${enhancedError instanceof Error ? enhancedError.message : 'Unknown error'}`);
+        
+        // Fallback to direct URL approach with enhanced parameters
+        const results = await this.tryDirectBingSearch(page, query, numResults, timeout);
+        await context.close();
+        return results;
       }
-
-      // Get the page content
-      const html = await page.content();
-      
-      await context.close();
-      
-      console.log(`[SearchEngine] Browser Bing got HTML with length: ${html.length}`);
-      
-      const results = this.parseBingResults(html, numResults);
-      console.log(`[SearchEngine] Browser Bing parsed ${results.length} results`);
-      
-      return results;
     } catch (error) {
       console.error(`[SearchEngine] Browser Bing search failed:`, error);
       throw error;
     }
+  }
+
+  private async tryEnhancedBingSearch(page: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    console.log(`[SearchEngine] Trying enhanced Bing search via web interface...`);
+    
+    // Navigate to Bing homepage first to establish proper session
+    await page.goto('https://www.bing.com', { 
+      waitUntil: 'domcontentloaded',
+      timeout: timeout / 2
+    });
+    
+    // Wait a moment for page to fully load
+    await page.waitForTimeout(500);
+    
+    // Find and use the search box (more realistic than direct URL)
+    try {
+      await page.waitForSelector('#sb_form_q', { timeout: 2000 });
+      await page.fill('#sb_form_q', query);
+      
+      // Submit the search form
+      await Promise.all([
+        page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeout }),
+        page.click('#search_icon')
+      ]);
+      
+    } catch (formError) {
+      console.log(`[SearchEngine] Search form submission failed, falling back to URL navigation`);
+      throw formError;
+    }
+    
+    // Wait for search results to load
+    try {
+      await page.waitForSelector('.b_algo, .b_result', { timeout: 3000 });
+    } catch {
+      console.log(`[SearchEngine] Enhanced Bing results selector not found, proceeding anyway`);
+    }
+
+    const html = await page.content();
+    console.log(`[SearchEngine] Enhanced Bing got HTML with length: ${html.length}`);
+    
+    const results = this.parseBingResults(html, numResults);
+    console.log(`[SearchEngine] Enhanced Bing parsed ${results.length} results`);
+    
+    return results;
+  }
+
+  private async tryDirectBingSearch(page: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    console.log(`[SearchEngine] Trying direct Bing search with enhanced parameters...`);
+    
+    // Generate a conversation ID (cvid) similar to what Bing uses
+    const cvid = this.generateConversationId();
+    
+    // Construct URL with enhanced parameters based on successful manual searches
+    const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.min(numResults, 10)}&form=QBLH&sp=-1&qs=n&cvid=${cvid}`;
+    console.log(`[SearchEngine] Browser navigating to enhanced Bing URL: ${searchUrl}`);
+    
+    await page.goto(searchUrl, { 
+      waitUntil: 'domcontentloaded',
+      timeout: timeout
+    });
+
+    // Wait for search results to load
+    try {
+      await page.waitForSelector('.b_algo, .b_result', { timeout: 3000 });
+    } catch {
+      console.log(`[SearchEngine] Direct Bing results selector not found, proceeding anyway`);
+    }
+
+    const html = await page.content();
+    console.log(`[SearchEngine] Direct Bing got HTML with length: ${html.length}`);
+    
+    const results = this.parseBingResults(html, numResults);
+    console.log(`[SearchEngine] Direct Bing parsed ${results.length} results`);
+    
+    return results;
+  }
+
+  private generateConversationId(): string {
+    // Generate a conversation ID similar to Bing's format (32 hex characters)
+    const chars = '0123456789ABCDEF';
+    let cvid = '';
+    for (let i = 0; i < 32; i++) {
+      cvid += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return cvid;
   }
 
 
@@ -663,6 +795,94 @@ export class SearchEngine {
     }
     
     return url;
+  }
+
+  private assessResultQuality(results: SearchResult[], originalQuery: string): number {
+    if (results.length === 0) return 0;
+
+    // Extract keywords from the original query (ignore common words)
+    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'group', 'members']);
+    const queryWords = originalQuery.toLowerCase()
+      .replace(/[^\w\s]/g, ' ')
+      .split(/\s+/)
+      .filter(word => word.length > 2 && !commonWords.has(word));
+
+    if (queryWords.length === 0) return 0.5; // Default score if no meaningful keywords
+
+    console.log(`[SearchEngine] Quality assessment - Query keywords: [${queryWords.join(', ')}]`);
+
+    let totalScore = 0;
+    let scoredResults = 0;
+
+    for (const result of results) {
+      const titleText = result.title.toLowerCase();
+      const descText = result.description.toLowerCase();
+      const urlText = result.url.toLowerCase();
+      const combinedText = `${titleText} ${descText} ${urlText}`;
+
+      // Count keyword matches
+      let keywordMatches = 0;
+      let phraseMatches = 0;
+
+      // Check for exact phrase matches (higher value)
+      if (queryWords.length >= 2) {
+        const queryPhrases = [];
+        for (let i = 0; i < queryWords.length - 1; i++) {
+          queryPhrases.push(queryWords.slice(i, i + 2).join(' '));
+        }
+        if (queryWords.length >= 3) {
+          queryPhrases.push(queryWords.slice(0, 3).join(' '));
+        }
+
+        for (const phrase of queryPhrases) {
+          if (combinedText.includes(phrase)) {
+            phraseMatches++;
+          }
+        }
+      }
+
+      // Check individual keyword matches
+      for (const keyword of queryWords) {
+        if (combinedText.includes(keyword)) {
+          keywordMatches++;
+        }
+      }
+
+      // Calculate score for this result
+      const keywordRatio = keywordMatches / queryWords.length;
+      const phraseBonus = phraseMatches * 0.3; // Bonus for phrase matches
+      const resultScore = Math.min(1.0, keywordRatio + phraseBonus);
+
+      // Penalty for obvious irrelevant content
+      const irrelevantPatterns = [
+        /recipe/i, /cooking/i, /food/i, /restaurant/i, /menu/i,
+        /weather/i, /temperature/i, /forecast/i,
+        /shopping/i, /sale/i, /price/i, /buy/i, /store/i,
+        /movie/i, /film/i, /tv show/i, /entertainment/i,
+        /sports/i, /game/i, /score/i, /team/i,
+        /fashion/i, /clothing/i, /style/i,
+        /travel/i, /hotel/i, /flight/i, /vacation/i,
+        /car/i, /vehicle/i, /automotive/i,
+        /real estate/i, /property/i, /house/i, /apartment/i
+      ];
+
+      let penalty = 0;
+      for (const pattern of irrelevantPatterns) {
+        if (pattern.test(combinedText)) {
+          penalty += 0.2;
+        }
+      }
+
+      const finalScore = Math.max(0, resultScore - penalty);
+      
+      console.log(`[SearchEngine] Result "${result.title.substring(0, 50)}..." - Score: ${finalScore.toFixed(2)} (keywords: ${keywordMatches}/${queryWords.length}, phrases: ${phraseMatches}, penalty: ${penalty.toFixed(2)})`);
+      
+      totalScore += finalScore;
+      scoredResults++;
+    }
+
+    const averageScore = scoredResults > 0 ? totalScore / scoredResults : 0;
+    return averageScore;
   }
 
   async closeAll(): Promise<void> {

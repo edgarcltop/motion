@@ -119,6 +119,12 @@ The server supports several environment variables for configuration:
 - **`BROWSER_TYPES`**: Comma-separated list of browser types to use (default: 'chromium,firefox', options: chromium, firefox, webkit)
 - **`BROWSER_FALLBACK_THRESHOLD`**: Number of axios failures before using browser fallback (default: 3)
 
+### Search Quality and Engine Selection
+
+- **`ENABLE_RELEVANCE_CHECKING`**: Enable/disable search result quality validation (default: true)
+- **`RELEVANCE_THRESHOLD`**: Minimum quality score for search results (0.0-1.0, default: 0.3)
+- **`FORCE_MULTI_ENGINE_SEARCH`**: Try all search engines and return best results (default: false)
+
 ## Troubleshooting
 
 ### Slow Response Times
@@ -132,6 +138,13 @@ The server supports several environment variables for configuration:
 - **Try headless mode**: Ensure `BROWSER_HEADLESS=true` (default) for server environments
 - **Network restrictions**: Some networks block browser automation - try different network or VPN
 - **HTTP/2 issues**: The server automatically handles HTTP/2 protocol errors with fallback to HTTP/1.1
+
+### Search Quality Issues
+- **Irrelevant results**: The server now includes automatic quality validation to detect irrelevant results
+- **Enable quality checking**: Set `ENABLE_RELEVANCE_CHECKING=true` (enabled by default)
+- **Adjust quality threshold**: Set `RELEVANCE_THRESHOLD=0.5` for stricter quality requirements
+- **Force multi-engine search**: Set `FORCE_MULTI_ENGINE_SEARCH=true` to try all engines and return the best results
+- **Disable quality checking**: Set `ENABLE_RELEVANCE_CHECKING=false` to disable validation (not recommended)
 
 ### Memory Usage
 - **Automatic cleanup**: Browsers are automatically cleaned up after each operation to prevent memory leaks
