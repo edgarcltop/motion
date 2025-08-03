@@ -100,6 +100,11 @@ class WebSearchMCPServer {
           // Format the results as a comprehensive text response
           let responseText = `Search completed for "${result.query}" with ${result.total_results} results:\n\n`;
           
+          // Add status line if available
+          if (result.status) {
+            responseText += `**Status:** ${result.status}\n\n`;
+          }
+          
           const maxLength = validatedArgs.maxContentLength;
           
           result.results.forEach((searchResult, idx) => {
@@ -386,7 +391,9 @@ class WebSearchMCPServer {
         ? await this.contentExtractor.extractContentForResults(searchResults, limit)
         : searchResults.slice(0, limit); // If not extracting content, just take the first 'limit' results
       
-      // Log extraction summary with failure reasons
+      // Log extraction summary with failure reasons and generate combined status
+      let combinedStatus = `Search engine: ${searchResponse.engine}; ${limit} result requested/${searchResults.length} obtained; PDF: ${pdfCount}; ${followedCount} followed`;
+      
       if (includeContent) {
         const successCount = enhancedResults.filter(r => r.fetchStatus === 'success').length;
         const failedResults = enhancedResults.filter(r => r.fetchStatus === 'error');
@@ -396,6 +403,9 @@ class WebSearchMCPServer {
         const failureReasonText = failureReasons.length > 0 ? ` (${failureReasons.join(', ')})` : '';
         
         console.error(`[web-search-mcp] DEBUG: Links requested: ${limit}; Successfully extracted: ${successCount}; Failed: ${failedCount}${failureReasonText}; Results: ${enhancedResults.length}.`);
+        
+        // Add extraction info to combined status
+        combinedStatus += `; Successfully extracted: ${successCount}; Failed: ${failedCount}; Results: ${enhancedResults.length}`;
       }
 
       const searchTime = Date.now() - startTime;
@@ -405,6 +415,7 @@ class WebSearchMCPServer {
         total_results: enhancedResults.length,
         search_time_ms: searchTime,
         query,
+        status: combinedStatus,
       };
     } catch (error) {
       console.error('Web search error:', error);

@@ -43,6 +43,7 @@ export interface WebSearchToolOutput {
   total_results: number;
   search_time_ms: number;
   query: string;
+  status?: string;
 }
 
 // New types for search summaries (snippets only)
