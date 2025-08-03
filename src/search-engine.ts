@@ -28,8 +28,9 @@ export class SearchEngine {
         const enableQualityCheck = process.env.ENABLE_RELEVANCE_CHECKING !== 'false';
         const qualityThreshold = parseFloat(process.env.RELEVANCE_THRESHOLD || '0.3');
         const forceMultiEngine = process.env.FORCE_MULTI_ENGINE_SEARCH === 'true';
+        const debugBrowsers = process.env.DEBUG_BROWSER_LIFECYCLE === 'true';
         
-        console.log(`[SearchEngine] Quality checking: ${enableQualityCheck}, threshold: ${qualityThreshold}, multi-engine: ${forceMultiEngine}`);
+        console.log(`[SearchEngine] Quality checking: ${enableQualityCheck}, threshold: ${qualityThreshold}, multi-engine: ${forceMultiEngine}, debug: ${debugBrowsers}`);
 
         // Try multiple approaches to get search results, starting with most reliable
         const approaches = [
@@ -42,8 +43,11 @@ export class SearchEngine {
         let bestEngine = 'None';
         let bestQuality = 0;
         
-        for (const approach of approaches) {
+        for (let i = 0; i < approaches.length; i++) {
+          const approach = approaches[i];
           try {
+            console.log(`[SearchEngine] Attempting ${approach.name} (${i + 1}/${approaches.length})...`);
+            
             // Use more aggressive timeouts for faster fallback
             const approachTimeout = Math.min(timeout / 3, 4000); // Max 4 seconds per approach for faster fallback
             const results = await approach.method(sanitizedQuery, numResults, approachTimeout);
@@ -74,7 +78,7 @@ export class SearchEngine {
               }
               
               // If this is the last engine or quality is acceptable, prepare to return
-              if (approach === approaches[approaches.length - 1]) {
+              if (i === approaches.length - 1) {
                 if (bestQuality >= qualityThreshold || !enableQualityCheck) {
                   console.log(`[SearchEngine] Using best results from ${bestEngine} (quality: ${bestQuality.toFixed(2)})`);
                   return { results: bestResults, engine: bestEngine };
@@ -88,6 +92,9 @@ export class SearchEngine {
             }
           } catch (error) {
             console.error(`[SearchEngine] ${approach.name} approach failed:`, error);
+            
+            // Handle browser-specific errors (no cleanup needed since each engine uses dedicated browsers)
+            await this.handleBrowserError(error, approach.name);
           }
         }
         
@@ -111,9 +118,52 @@ export class SearchEngine {
 
 
   private async tryBrowserBraveSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
-    console.log(`[SearchEngine] Trying browser-based Brave search...`);
+    console.log(`[SearchEngine] Trying browser-based Brave search with dedicated browser...`);
     
-    const browser = await this.browserPool.getBrowser();
+    // Try with retry mechanism
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      let browser;
+      try {
+        // Create a dedicated browser instance for Brave search only
+        const { firefox } = await import('playwright');
+        browser = await firefox.launch({
+          headless: process.env.BROWSER_HEADLESS !== 'false',
+          args: [
+            '--no-sandbox',
+            '--disable-dev-shm-usage',
+          ],
+        });
+        
+        console.log(`[SearchEngine] Brave search attempt ${attempt}/2 with fresh browser`);
+        const results = await this.tryBrowserBraveSearchInternal(browser, query, numResults, timeout);
+        return results;
+      } catch (error) {
+        console.error(`[SearchEngine] Brave search attempt ${attempt}/2 failed:`, error);
+        if (attempt === 2) {
+          throw error; // Re-throw on final attempt
+        }
+        // Small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } finally {
+        // Always close the dedicated browser
+        if (browser) {
+          try {
+            await browser.close();
+          } catch (closeError) {
+            console.log(`[SearchEngine] Error closing Brave browser:`, closeError);
+          }
+        }
+      }
+    }
+    
+    throw new Error('All Brave search attempts failed');
+  }
+
+  private async tryBrowserBraveSearchInternal(browser: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    // Validate browser is still functional before proceeding
+    if (!browser.isConnected()) {
+      throw new Error('Browser is not connected');
+    }
     
     try {
       const context = await browser.newContext({
@@ -123,35 +173,40 @@ export class SearchEngine {
         timezoneId: 'America/New_York',
       });
 
-      const page = await context.newPage();
-      
-      // Navigate to Brave search
-      const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web`;
-      console.log(`[SearchEngine] Browser navigating to Brave: ${searchUrl}`);
-      
-      await page.goto(searchUrl, { 
-        waitUntil: 'domcontentloaded',
-        timeout: timeout
-      });
-
-      // Wait for search results to load
       try {
-        await page.waitForSelector('[data-type="web"]', { timeout: 3000 });
-      } catch {
-        console.log(`[SearchEngine] Browser Brave results selector not found, proceeding anyway`);
-      }
+        const page = await context.newPage();
+        
+        // Navigate to Brave search
+        const searchUrl = `https://search.brave.com/search?q=${encodeURIComponent(query)}&source=web`;
+        console.log(`[SearchEngine] Browser navigating to Brave: ${searchUrl}`);
+        
+        await page.goto(searchUrl, { 
+          waitUntil: 'domcontentloaded',
+          timeout: timeout
+        });
 
-      // Get the page content
-      const html = await page.content();
-      
-      await context.close();
-      
-      console.log(`[SearchEngine] Browser Brave got HTML with length: ${html.length}`);
-      
-      const results = this.parseBraveResults(html, numResults);
-      console.log(`[SearchEngine] Browser Brave parsed ${results.length} results`);
-      
-      return results;
+        // Wait for search results to load
+        try {
+          await page.waitForSelector('[data-type="web"]', { timeout: 3000 });
+        } catch {
+          console.log(`[SearchEngine] Browser Brave results selector not found, proceeding anyway`);
+        }
+
+        // Get the page content
+        const html = await page.content();
+        
+        console.log(`[SearchEngine] Browser Brave got HTML with length: ${html.length}`);
+        
+        const results = this.parseBraveResults(html, numResults);
+        console.log(`[SearchEngine] Browser Brave parsed ${results.length} results`);
+        
+        await context.close();
+        return results;
+      } catch (error) {
+        // Ensure context is closed even on error
+        await context.close();
+        throw error;
+      }
     } catch (error) {
       console.error(`[SearchEngine] Browser Brave search failed:`, error);
       throw error;
@@ -159,9 +214,54 @@ export class SearchEngine {
   }
 
   private async tryBrowserBingSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
-    console.log(`[SearchEngine] Trying browser-based Bing search...`);
+    console.log(`[SearchEngine] Trying browser-based Bing search with dedicated browser...`);
     
-    const browser = await this.browserPool.getBrowser();
+    // Try with retry mechanism
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      let browser;
+      try {
+        // Create a dedicated browser instance for Bing search only
+        const { chromium } = await import('playwright');
+        browser = await chromium.launch({
+          headless: process.env.BROWSER_HEADLESS !== 'false',
+          args: [
+            '--no-sandbox',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+          ],
+        });
+        
+        console.log(`[SearchEngine] Bing search attempt ${attempt}/2 with fresh browser`);
+        const results = await this.tryBrowserBingSearchInternal(browser, query, numResults, timeout);
+        return results;
+      } catch (error) {
+        console.error(`[SearchEngine] Bing search attempt ${attempt}/2 failed:`, error);
+        if (attempt === 2) {
+          throw error; // Re-throw on final attempt
+        }
+        // Small delay before retry
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } finally {
+        // Always close the dedicated browser
+        if (browser) {
+          try {
+            await browser.close();
+          } catch (closeError) {
+            console.log(`[SearchEngine] Error closing Bing browser:`, closeError);
+          }
+        }
+      }
+    }
+    
+    throw new Error('All Bing search attempts failed');
+  }
+
+  private async tryBrowserBingSearchInternal(browser: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    // Validate browser is still functional before proceeding
+    if (!browser.isConnected()) {
+      throw new Error('Browser is not connected');
+    }
     
     try {
       // Enhanced browser context with more realistic fingerprinting
@@ -188,18 +288,24 @@ export class SearchEngine {
 
       const page = await context.newPage();
       
-      // Try enhanced Bing search with proper web interface flow
       try {
-        const results = await this.tryEnhancedBingSearch(page, query, numResults, timeout);
+        // Try enhanced Bing search with proper web interface flow
+        try {
+          const results = await this.tryEnhancedBingSearch(page, query, numResults, timeout);
+          await context.close();
+          return results;
+        } catch (enhancedError) {
+          console.log(`[SearchEngine] Enhanced Bing search failed, trying fallback: ${enhancedError instanceof Error ? enhancedError.message : 'Unknown error'}`);
+          
+          // Fallback to direct URL approach with enhanced parameters
+          const results = await this.tryDirectBingSearch(page, query, numResults, timeout);
+          await context.close();
+          return results;
+        }
+      } catch (error) {
+        // Ensure context is closed even on error
         await context.close();
-        return results;
-      } catch (enhancedError) {
-        console.log(`[SearchEngine] Enhanced Bing search failed, trying fallback: ${enhancedError instanceof Error ? enhancedError.message : 'Unknown error'}`);
-        
-        // Fallback to direct URL approach with enhanced parameters
-        const results = await this.tryDirectBingSearch(page, query, numResults, timeout);
-        await context.close();
-        return results;
+        throw error;
       }
     } catch (error) {
       console.error(`[SearchEngine] Browser Bing search failed:`, error);
@@ -883,6 +989,51 @@ export class SearchEngine {
 
     const averageScore = scoredResults > 0 ? totalScore / scoredResults : 0;
     return averageScore;
+  }
+
+  private async validateBrowserHealth(browser: any): Promise<boolean> {
+    const debugBrowsers = process.env.DEBUG_BROWSER_LIFECYCLE === 'true';
+    
+    try {
+      if (debugBrowsers) console.log(`[SearchEngine] Validating browser health...`);
+      
+      // Check if browser is still connected
+      if (!browser.isConnected()) {
+        if (debugBrowsers) console.log(`[SearchEngine] Browser is not connected`);
+        return false;
+      }
+      
+      // Try to create a simple context to test browser responsiveness
+      const testContext = await browser.newContext();
+      await testContext.close();
+      
+      if (debugBrowsers) console.log(`[SearchEngine] Browser health check passed`);
+      return true;
+    } catch (error) {
+      console.log(`[SearchEngine] Browser health check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false;
+    }
+  }
+
+  private async handleBrowserError(error: any, engineName: string, attemptNumber: number = 1): Promise<void> {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`[SearchEngine] ${engineName} browser error (attempt ${attemptNumber}): ${errorMessage}`);
+    
+    // Check for specific browser-related errors
+    if (errorMessage.includes('Target page, context or browser has been closed') ||
+        errorMessage.includes('Browser has been closed') ||
+        errorMessage.includes('Session has been closed')) {
+      
+      console.log(`[SearchEngine] Detected browser session closure, attempting to refresh browser pool`);
+      
+      // Try to refresh the browser pool for subsequent attempts
+      try {
+        await this.browserPool.closeAll();
+        console.log(`[SearchEngine] Browser pool refreshed for ${engineName}`);
+      } catch (refreshError) {
+        console.error(`[SearchEngine] Failed to refresh browser pool: ${refreshError instanceof Error ? refreshError.message : 'Unknown error'}`);
+      }
+    }
   }
 
   async closeAll(): Promise<void> {

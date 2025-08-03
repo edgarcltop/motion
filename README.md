@@ -16,12 +16,13 @@ The server provides three specialised tools for different web search needs:
 
 ### 1. `full-web-search` (Main Tool)
 When a comprehensive search is requested, the server uses an **optimized search strategy**:
-1. **Browser-based Bing Search** - Primary method using Playwright
-2. **Browser-based Brave Search** - Secondary option
+1. **Browser-based Bing Search** - Primary method using dedicated Chromium instance
+2. **Browser-based Brave Search** - Secondary option using dedicated Firefox instance
 3. **Axios DuckDuckGo Search** - Final fallback using traditional HTTP
-4. **Content extraction**: Tries axios first, then falls back to browser with human behavior simulation
-5. **Concurrent processing**: Extracts content from multiple pages simultaneously with timeout protection
-6. **HTTP/2 error recovery**: Automatically falls back to HTTP/1.1 when protocol errors occur
+4. **Dedicated browser isolation**: Each search engine gets its own browser instance with automatic cleanup
+5. **Content extraction**: Tries axios first, then falls back to browser with human behavior simulation
+6. **Concurrent processing**: Extracts content from multiple pages simultaneously with timeout protection
+7. **HTTP/2 error recovery**: Automatically falls back to HTTP/1.1 when protocol errors occur
 
 ### 2. `get-web-search-summaries` (Lightweight Alternative)
 For quick search results without full content extraction:
@@ -124,6 +125,7 @@ The server supports several environment variables for configuration:
 - **`ENABLE_RELEVANCE_CHECKING`**: Enable/disable search result quality validation (default: true)
 - **`RELEVANCE_THRESHOLD`**: Minimum quality score for search results (0.0-1.0, default: 0.3)
 - **`FORCE_MULTI_ENGINE_SEARCH`**: Try all search engines and return best results (default: false)
+- **`DEBUG_BROWSER_LIFECYCLE`**: Enable detailed browser lifecycle logging for debugging (default: false)
 
 ## Troubleshooting
 
@@ -145,6 +147,15 @@ The server supports several environment variables for configuration:
 - **Adjust quality threshold**: Set `RELEVANCE_THRESHOLD=0.5` for stricter quality requirements
 - **Force multi-engine search**: Set `FORCE_MULTI_ENGINE_SEARCH=true` to try all engines and return the best results
 - **Disable quality checking**: Set `ENABLE_RELEVANCE_CHECKING=false` to disable validation (not recommended)
+
+### Browser Context Issues
+- **"Target page, context or browser has been closed" errors**: COMPLETELY ELIMINATED with dedicated browser architecture
+- **Zero browser sharing**: Each search engine creates and manages its own dedicated browser instance
+- **Automatic cleanup**: Each browser is automatically closed after its search completes
+- **Retry mechanism**: 2-attempt retry with fresh browser instances on failures
+- **Enhanced reliability**: No cross-contamination between search engines possible
+- **Firefox isMobile compatibility**: Robust Firefox detection to prevent unsupported option errors
+- **Simplified architecture**: Removed complex browser pooling in favor of dedicated instances
 
 ### Memory Usage
 - **Automatic cleanup**: Browsers are automatically cleaned up after each operation to prevent memory leaks

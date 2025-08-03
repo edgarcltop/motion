@@ -104,8 +104,12 @@ export class EnhancedContentExtractor {
         hasTouch: Math.random() > 0.7,
       };
 
-      // Firefox doesn't support isMobile option
-      const contextOptions = browserType === 'firefox' 
+      // Firefox doesn't support isMobile option - check multiple ways to ensure detection
+      const isFirefox = browserType === 'firefox' || 
+                       browserType.includes('firefox') || 
+                       browser.constructor.name.toLowerCase().includes('firefox');
+      
+      const contextOptions = isFirefox
         ? baseContextOptions 
         : { ...baseContextOptions, isMobile: Math.random() > 0.8 };
 
