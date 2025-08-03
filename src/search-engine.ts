@@ -214,14 +214,18 @@ export class SearchEngine {
   }
 
   private async tryBrowserBingSearch(query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
-    console.log(`[SearchEngine] Trying browser-based Bing search with dedicated browser...`);
+    const debugBing = process.env.DEBUG_BING_SEARCH === 'true';
+    console.error(`[SearchEngine] BING: Starting browser-based search with dedicated browser for query: "${query}"`);
     
     // Try with retry mechanism
     for (let attempt = 1; attempt <= 2; attempt++) {
       let browser;
       try {
+        console.error(`[SearchEngine] BING: Attempt ${attempt}/2 - Launching Chromium browser...`);
+        
         // Create a dedicated browser instance for Bing search only
         const { chromium } = await import('playwright');
+        const startTime = Date.now();
         browser = await chromium.launch({
           headless: process.env.BROWSER_HEADLESS !== 'false',
           args: [
@@ -232,23 +236,37 @@ export class SearchEngine {
           ],
         });
         
-        console.log(`[SearchEngine] Bing search attempt ${attempt}/2 with fresh browser`);
+        const launchTime = Date.now() - startTime;
+        console.error(`[SearchEngine] BING: Browser launched successfully in ${launchTime}ms, connected: ${browser.isConnected()}`);
+        
         const results = await this.tryBrowserBingSearchInternal(browser, query, numResults, timeout);
+        console.error(`[SearchEngine] BING: Search completed successfully with ${results.length} results`);
         return results;
       } catch (error) {
-        console.error(`[SearchEngine] Bing search attempt ${attempt}/2 failed:`, error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error(`[SearchEngine] BING: Attempt ${attempt}/2 FAILED with error: ${errorMessage}`);
+        
+        if (debugBing) {
+          console.error(`[SearchEngine] BING: Full error details:`, error);
+        }
+        
         if (attempt === 2) {
+          console.error(`[SearchEngine] BING: All attempts exhausted, giving up`);
           throw error; // Re-throw on final attempt
         }
         // Small delay before retry
+        console.error(`[SearchEngine] BING: Waiting 500ms before retry...`);
         await new Promise(resolve => setTimeout(resolve, 500));
       } finally {
         // Always close the dedicated browser
         if (browser) {
           try {
             await browser.close();
+            if (debugBing) {
+              console.error(`[SearchEngine] BING: Browser closed successfully`);
+            }
           } catch (closeError) {
-            console.log(`[SearchEngine] Error closing Bing browser:`, closeError);
+            console.error(`[SearchEngine] BING: Error closing browser:`, closeError);
           }
         }
       }
@@ -258,10 +276,15 @@ export class SearchEngine {
   }
 
   private async tryBrowserBingSearchInternal(browser: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
+    const debugBing = process.env.DEBUG_BING_SEARCH === 'true';
+    
     // Validate browser is still functional before proceeding
     if (!browser.isConnected()) {
+      console.error(`[SearchEngine] BING: Browser is not connected`);
       throw new Error('Browser is not connected');
     }
+    
+    console.error(`[SearchEngine] BING: Creating browser context with enhanced fingerprinting...`);
     
     try {
       // Enhanced browser context with more realistic fingerprinting
@@ -286,104 +309,181 @@ export class SearchEngine {
         }
       });
 
+      console.error(`[SearchEngine] BING: Context created, opening new page...`);
       const page = await context.newPage();
+      console.error(`[SearchEngine] BING: Page opened successfully`);
       
       try {
         // Try enhanced Bing search with proper web interface flow
         try {
+          console.error(`[SearchEngine] BING: Attempting enhanced search (homepage → form submission)...`);
           const results = await this.tryEnhancedBingSearch(page, query, numResults, timeout);
+          console.error(`[SearchEngine] BING: Enhanced search succeeded with ${results.length} results`);
           await context.close();
           return results;
         } catch (enhancedError) {
-          console.log(`[SearchEngine] Enhanced Bing search failed, trying fallback: ${enhancedError instanceof Error ? enhancedError.message : 'Unknown error'}`);
+          const errorMessage = enhancedError instanceof Error ? enhancedError.message : 'Unknown error';
+          console.error(`[SearchEngine] BING: Enhanced search failed: ${errorMessage}`);
+          
+          if (debugBing) {
+            console.error(`[SearchEngine] BING: Enhanced search error details:`, enhancedError);
+          }
+          
+          console.error(`[SearchEngine] BING: Falling back to direct URL search...`);
           
           // Fallback to direct URL approach with enhanced parameters
           const results = await this.tryDirectBingSearch(page, query, numResults, timeout);
+          console.error(`[SearchEngine] BING: Direct search succeeded with ${results.length} results`);
           await context.close();
           return results;
         }
       } catch (error) {
         // Ensure context is closed even on error
+        console.error(`[SearchEngine] BING: All search methods failed, closing context...`);
         await context.close();
         throw error;
       }
     } catch (error) {
-      console.error(`[SearchEngine] Browser Bing search failed:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error(`[SearchEngine] BING: Internal search failed: ${errorMessage}`);
+      
+      if (debugBing) {
+        console.error(`[SearchEngine] BING: Internal search error details:`, error);
+      }
+      
       throw error;
     }
   }
 
   private async tryEnhancedBingSearch(page: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
-    console.log(`[SearchEngine] Trying enhanced Bing search via web interface...`);
+    const debugBing = process.env.DEBUG_BING_SEARCH === 'true';
+    console.error(`[SearchEngine] BING: Enhanced search - navigating to Bing homepage...`);
     
     // Navigate to Bing homepage first to establish proper session
+    const startTime = Date.now();
     await page.goto('https://www.bing.com', { 
       waitUntil: 'domcontentloaded',
       timeout: timeout / 2
     });
+    
+    const loadTime = Date.now() - startTime;
+    const pageTitle = await page.title();
+    const currentUrl = page.url();
+    console.error(`[SearchEngine] BING: Homepage loaded in ${loadTime}ms, title: "${pageTitle}", URL: ${currentUrl}`);
     
     // Wait a moment for page to fully load
     await page.waitForTimeout(500);
     
     // Find and use the search box (more realistic than direct URL)
     try {
+      console.error(`[SearchEngine] BING: Looking for search form elements...`);
       await page.waitForSelector('#sb_form_q', { timeout: 2000 });
+      console.error(`[SearchEngine] BING: Search box found, filling with query: "${query}"`);
       await page.fill('#sb_form_q', query);
       
+      console.error(`[SearchEngine] BING: Clicking search button and waiting for navigation...`);
       // Submit the search form
       await Promise.all([
         page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: timeout }),
         page.click('#search_icon')
       ]);
       
+      const searchLoadTime = Date.now() - startTime;
+      const searchPageTitle = await page.title();
+      const searchPageUrl = page.url();
+      console.error(`[SearchEngine] BING: Search completed in ${searchLoadTime}ms total, title: "${searchPageTitle}", URL: ${searchPageUrl}`);
+      
     } catch (formError) {
-      console.log(`[SearchEngine] Search form submission failed, falling back to URL navigation`);
+      const errorMessage = formError instanceof Error ? formError.message : 'Unknown error';
+      console.error(`[SearchEngine] BING: Search form submission failed: ${errorMessage}`);
+      
+      if (debugBing) {
+        console.error(`[SearchEngine] BING: Form error details:`, formError);
+      }
+      
       throw formError;
     }
     
     // Wait for search results to load
     try {
+      console.error(`[SearchEngine] BING: Waiting for search results to appear...`);
       await page.waitForSelector('.b_algo, .b_result', { timeout: 3000 });
+      console.error(`[SearchEngine] BING: Search results selector found`);
     } catch {
-      console.log(`[SearchEngine] Enhanced Bing results selector not found, proceeding anyway`);
+      console.error(`[SearchEngine] BING: Search results selector not found, proceeding with page content anyway`);
     }
 
     const html = await page.content();
-    console.log(`[SearchEngine] Enhanced Bing got HTML with length: ${html.length}`);
+    console.error(`[SearchEngine] BING: Got page HTML with length: ${html.length} characters`);
+    
+    if (debugBing && html.length < 10000) {
+      console.error(`[SearchEngine] BING: WARNING - HTML seems short, possible bot detection or error page`);
+    }
     
     const results = this.parseBingResults(html, numResults);
-    console.log(`[SearchEngine] Enhanced Bing parsed ${results.length} results`);
+    console.error(`[SearchEngine] BING: Enhanced search parsed ${results.length} results`);
+    
+    if (results.length === 0) {
+      console.error(`[SearchEngine] BING: WARNING - No results found, possible parsing failure or empty search`);
+      
+      if (debugBing) {
+        const sampleHtml = html.substring(0, 1000);
+        console.error(`[SearchEngine] BING: Sample HTML for debugging:`, sampleHtml);
+      }
+    }
     
     return results;
   }
 
   private async tryDirectBingSearch(page: any, query: string, numResults: number, timeout: number): Promise<SearchResult[]> {
-    console.log(`[SearchEngine] Trying direct Bing search with enhanced parameters...`);
+    const debugBing = process.env.DEBUG_BING_SEARCH === 'true';
+    console.error(`[SearchEngine] BING: Direct search with enhanced parameters...`);
     
     // Generate a conversation ID (cvid) similar to what Bing uses
     const cvid = this.generateConversationId();
     
     // Construct URL with enhanced parameters based on successful manual searches
     const searchUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.min(numResults, 10)}&form=QBLH&sp=-1&qs=n&cvid=${cvid}`;
-    console.log(`[SearchEngine] Browser navigating to enhanced Bing URL: ${searchUrl}`);
+    console.error(`[SearchEngine] BING: Navigating to direct URL: ${searchUrl}`);
     
+    const startTime = Date.now();
     await page.goto(searchUrl, { 
       waitUntil: 'domcontentloaded',
       timeout: timeout
     });
+    
+    const loadTime = Date.now() - startTime;
+    const pageTitle = await page.title();
+    const currentUrl = page.url();
+    console.error(`[SearchEngine] BING: Direct page loaded in ${loadTime}ms, title: "${pageTitle}", URL: ${currentUrl}`);
 
     // Wait for search results to load
     try {
+      console.error(`[SearchEngine] BING: Waiting for search results to appear...`);
       await page.waitForSelector('.b_algo, .b_result', { timeout: 3000 });
+      console.error(`[SearchEngine] BING: Search results selector found`);
     } catch {
-      console.log(`[SearchEngine] Direct Bing results selector not found, proceeding anyway`);
+      console.error(`[SearchEngine] BING: Search results selector not found, proceeding with page content anyway`);
     }
 
     const html = await page.content();
-    console.log(`[SearchEngine] Direct Bing got HTML with length: ${html.length}`);
+    console.error(`[SearchEngine] BING: Got page HTML with length: ${html.length} characters`);
+    
+    if (debugBing && html.length < 10000) {
+      console.error(`[SearchEngine] BING: WARNING - HTML seems short, possible bot detection or error page`);
+    }
     
     const results = this.parseBingResults(html, numResults);
-    console.log(`[SearchEngine] Direct Bing parsed ${results.length} results`);
+    console.error(`[SearchEngine] BING: Direct search parsed ${results.length} results`);
+    
+    if (results.length === 0) {
+      console.error(`[SearchEngine] BING: WARNING - No results found, possible parsing failure or empty search`);
+      
+      if (debugBing) {
+        const sampleHtml = html.substring(0, 1000);
+        console.error(`[SearchEngine] BING: Sample HTML for debugging:`, sampleHtml);
+      }
+    }
     
     return results;
   }
@@ -679,11 +779,20 @@ export class SearchEngine {
   }
 
   private parseBingResults(html: string, maxResults: number): SearchResult[] {
-    console.log(`[SearchEngine] Parsing Bing HTML with length: ${html.length}`);
+    const debugBing = process.env.DEBUG_BING_SEARCH === 'true';
+    console.error(`[SearchEngine] BING: Parsing HTML with length: ${html.length}`);
     
     const $ = cheerio.load(html);
     const results: SearchResult[] = [];
     const timestamp = generateTimestamp();
+
+    // Check for common Bing error indicators
+    const pageTitle = $('title').text();
+    console.error(`[SearchEngine] BING: Page title: "${pageTitle}"`);
+    
+    if (pageTitle.includes('Access Denied') || pageTitle.includes('blocked') || pageTitle.includes('captcha')) {
+      console.error(`[SearchEngine] BING: ERROR - Bot detection or access denied detected in page title`);
+    }
 
     // Bing result selectors
     const resultSelectors = [
@@ -692,14 +801,21 @@ export class SearchEngine {
       '.b_card'      // Card format
     ];
     
+    console.error(`[SearchEngine] BING: Checking for result elements...`);
+    
+    // Log counts for all selectors first
+    for (const selector of resultSelectors) {
+      const elements = $(selector);
+      console.error(`[SearchEngine] BING: Found ${elements.length} elements with selector "${selector}"`);
+    }
+    
     let foundResults = false;
     
     for (const selector of resultSelectors) {
       if (foundResults && results.length >= maxResults) break;
       
-      console.log(`[SearchEngine] Trying Bing selector: ${selector}`);
       const elements = $(selector);
-      console.log(`[SearchEngine] Found ${elements.length} elements with selector ${selector}`);
+      if (elements.length === 0) continue;
       
       elements.each((_index, element) => {
         if (results.length >= maxResults) return false;
