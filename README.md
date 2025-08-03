@@ -142,20 +142,9 @@ The server supports several environment variables for configuration:
 - **HTTP/2 issues**: The server automatically handles HTTP/2 protocol errors with fallback to HTTP/1.1
 
 ### Search Quality Issues
-- **Irrelevant results**: The server now includes automatic quality validation to detect irrelevant results
 - **Enable quality checking**: Set `ENABLE_RELEVANCE_CHECKING=true` (enabled by default)
 - **Adjust quality threshold**: Set `RELEVANCE_THRESHOLD=0.5` for stricter quality requirements
 - **Force multi-engine search**: Set `FORCE_MULTI_ENGINE_SEARCH=true` to try all engines and return the best results
-- **Disable quality checking**: Set `ENABLE_RELEVANCE_CHECKING=false` to disable validation (not recommended)
-
-### Browser Context Issues
-- **"Target page, context or browser has been closed" errors**: COMPLETELY ELIMINATED with dedicated browser architecture
-- **Zero browser sharing**: Each search engine creates and manages its own dedicated browser instance
-- **Automatic cleanup**: Each browser is automatically closed after its search completes
-- **Retry mechanism**: 2-attempt retry with fresh browser instances on failures
-- **Enhanced reliability**: No cross-contamination between search engines possible
-- **Firefox isMobile compatibility**: Robust Firefox detection to prevent unsupported option errors
-- **Simplified architecture**: Removed complex browser pooling in favor of dedicated instances
 
 ### Memory Usage
 - **Automatic cleanup**: Browsers are automatically cleaned up after each operation to prevent memory leaks
