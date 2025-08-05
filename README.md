@@ -1,6 +1,6 @@
 # Web Search MCP Server for use with Local LLMs
 
-A TypeScript MCP (Model Context Protocol) server that provides comprehensive web search capabilities with multiple tools for different use cases.
+A TypeScript MCP (Model Context Protocol) server that provides comprehensive web search capabilities using direct connections (no API keys required) with multiple tools for different use cases.
 
 ## Features
 
