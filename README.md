@@ -4,10 +4,10 @@ A TypeScript MCP (Model Context Protocol) server that provides comprehensive web
 
 ## Features
 
-- **Multi-Engine Web Search**: Prioritizes Bing > Brave > DuckDuckGo for optimal reliability and performance
+- **Multi-Engine Web Search**: Prioritises Bing > Brave > DuckDuckGo for optimal reliability and performance
 - **Full Page Content Extraction**: Fetches and extracts complete page content from search results
 - **Multiple Search Tools**: Three specialised tools for different use cases
-- **Smart Request Strategy**: Uses fast axios requests first, then falls back to browser-based extraction if bot detection is encountered
+- **Smart Request Strategy**: Switches between playwright browesrs and fast axios requests to ensure results are returned
 - **Concurrent Processing**: Extracts content from multiple pages simultaneously
 
 ## How It Works
@@ -15,7 +15,7 @@ A TypeScript MCP (Model Context Protocol) server that provides comprehensive web
 The server provides three specialised tools for different web search needs:
 
 ### 1. `full-web-search` (Main Tool)
-When a comprehensive search is requested, the server uses an **optimized search strategy**:
+When a comprehensive search is requested, the server uses an **optimised search strategy**:
 1. **Browser-based Bing Search** - Primary method using dedicated Chromium instance
 2. **Browser-based Brave Search** - Secondary option using dedicated Firefox instance
 3. **Axios DuckDuckGo Search** - Final fallback using traditional HTTP
@@ -26,7 +26,7 @@ When a comprehensive search is requested, the server uses an **optimized search 
 
 ### 2. `get-web-search-summaries` (Lightweight Alternative)
 For quick search results without full content extraction:
-1. Performs the same optimized multi-engine search as `full-web-search`
+1. Performs the same optimised multi-engine search as `full-web-search`
 2. Returns only the search result snippets/descriptions
 3. Does not follow links to extract full page content
 
@@ -38,7 +38,7 @@ For extracting content from a specific webpage:
 
 ## Compatibility
 
-This MCP server has been developed and tested with **LM Studio**. It has not been tested with other MCP clients.
+This MCP server has been developed and tested with **LM Studio** and **LibreChat**. It has not been tested with other MCP clients.
 
 ### Model Compatibility
 **Important:** Prioritise using more recent models designated for tool use. 
@@ -68,6 +68,8 @@ Older models (even those with tool use specified) may not work or may work errat
    npm run build
    ```
    This will create a `node_modules` folder with all required dependencies, install Playwright browsers, and build the project.
+   
+   **Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
 4. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
 
 ```json
@@ -80,12 +82,31 @@ Older models (even those with tool use specified) may not work or may work errat
   }
 }
 ```
-
 **Example paths:**
 - macOS/Linux: `~/mcp-servers/web-search-mcp/dist/index.js`
 - Windows: `C:\\mcp-servers\\web-search-mcp\\dist\\index.js`
 
-**Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
+In LibreChat, you can include the MCP server in the librechat.yaml. If you are running LibreChat in Docker, you must first mount your local directory in docker-compose.override.yml.
+
+in `docker-compose.override.yml`:
+```yaml
+services:
+  api:
+    volumes:
+    - type: bind
+      source: /path/to/your/mcp/directory
+      target: /app/mcp
+```
+in `librechat.yaml`:
+```yaml
+mcpServers:
+  web-search:
+    type: stdio
+    command: node
+    args:
+    - /app/mcp/web-search-mcp/dist/index.js
+    serverInstructions: true
+```
 
 **Troubleshooting:**
 - If `npm install` fails, try updating Node.js to version 18+ and npm to version 8+
@@ -130,7 +151,7 @@ The server supports several environment variables for configuration:
 ## Troubleshooting
 
 ### Slow Response Times
-- **Optimized timeouts**: Default timeout reduced to 6 seconds with concurrent processing for faster results
+- **Optimised timeouts**: Default timeout reduced to 6 seconds with concurrent processing for faster results
 - **Concurrent extraction**: Content is now extracted from multiple pages simultaneously
 - **Reduce timeouts further**: Set `DEFAULT_TIMEOUT=4000` for even faster responses (may reduce success rate)
 - **Use fewer browsers**: Set `MAX_BROWSERS=1` to reduce memory usage
@@ -212,7 +233,7 @@ The most comprehensive web search tool that:
 ### 2. `get-web-search-summaries` (Lightweight Alternative)
 A lightweight alternative for quick search results:
 1. Takes a search query and optional number of results (1-10, default 5)
-2. Performs the same optimized multi-engine search as `full-web-search`
+2. Performs the same optimised multi-engine search as `full-web-search`
 3. Returns only search result snippets/descriptions (no content extraction)
 4. Faster and more efficient for quick research
 
