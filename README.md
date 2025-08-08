@@ -68,7 +68,7 @@ Older models (even those with tool use specified) may not work or may work errat
    npm run build
    ```
    This will create a `node_modules` folder with all required dependencies, install Playwright browsers, and build the project.
-   
+
    **Note:** You must run `npm install` in the root of the extracted folder (not in `dist/`).
 4. Configure your `mcp.json` to point to the extracted `dist/index.js` file:
 
@@ -188,22 +188,6 @@ npm run dev    # Development with hot reload
 npm run build  # Build TypeScript to JavaScript
 npm run lint   # Run ESLint
 npm run format # Run Prettier
-```
-
-## MCP Integration
-
-### LM Studio Configuration
-
-Add to your `mcp.json`:
-```json
-{
-  "mcpServers": {
-    "web-search": {
-      "command": "node",
-      "args": ["/path/to/web-search-mcp/dist/index.js"]
-    }
-  }
-}
 ```
 
 ## MCP Tools
